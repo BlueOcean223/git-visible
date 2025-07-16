@@ -1,151 +1,117 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 )
 
-// getDotFilePath returns the dot file for the repos list.
-// Creates it and the enclosing folder if it does not exist.
+// getDotFilePath 获取存储git仓库路径的文件地址
 func getDotFilePath() string {
 	usr, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
 	}
+	// 使用 filepath.Join 提升多平台兼容性
+	filePath := filepath.Join(usr.HomeDir, ".goGitLocalStats")
 
-	dotFile := usr.HomeDir + "/.goGitLocalStats"
-
-	return dotFile
-}
-
-// openFile opens the file located at `filePath`. Creates it if not existing.
-func openFile(filePath string) *os.File {
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_RDWR, 0755)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// file does not exist
-			_, err = os.Create(filePath)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			// other error
-			panic(err)
+	// 如果文件不存在，则创建一个空的文件
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		_, err := os.Create(filePath)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
-
-	return f
+	return filePath
 }
 
-// parseFileLinesToSlice given a file path string, gets the content
-// of each line and parses it to a slice of strings.
+// parseFileLinesToSlice 将文件内容按行切割为string切片
 func parseFileLinesToSlice(filePath string) []string {
-	f := openFile(filePath)
-	defer f.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		panic(err)
 	}
-	if err := scanner.Err(); err != nil {
-		if err != io.EOF {
-			panic(err)
-		}
-	}
-
-	return lines
+	return strings.Split(strings.TrimSpace(string(content)), "\n")
 }
 
-// sliceContains returns true if `slice` contains `value`
-func sliceContains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
-// joinSlices adds the element of the `new` slice
-// into the `existing` slice, only if not already there
+// joinSlices 将新增的文件路径添加到已有的 slice 中，已有文件路径的不重复添加
 func joinSlices(new []string, existing []string) []string {
+	hash := make(map[string]bool, len(existing))
+	for _, path := range existing {
+		hash[path] = true
+	}
+
 	for _, i := range new {
-		if !sliceContains(existing, i) {
+		if !hash[i] {
 			existing = append(existing, i)
+			hash[i] = true
 		}
 	}
 	return existing
 }
 
-// dumpStringsSliceToFile writes content to the file in path `filePath` (overwriting existing content)
+// dumpStringsSliceToFile 将 slice 内容写入文件
 func dumpStringsSliceToFile(repos []string, filePath string) {
 	content := strings.Join(repos, "\n")
-	ioutil.WriteFile(filePath, []byte(content), 0755)
+	err := os.WriteFile(filePath, []byte(content), 0755)
+	if err != nil {
+		panic(err)
+	}
 }
 
-// addNewSliceElementsToFile given a slice of strings representing paths, stores them
-// to the filesystem
+// addNewSliceElementsToFile 添加新的 slice 元素到文件
 func addNewSliceElementsToFile(filePath string, newRepos []string) {
 	existingRepos := parseFileLinesToSlice(filePath)
 	repos := joinSlices(newRepos, existingRepos)
 	dumpStringsSliceToFile(repos, filePath)
 }
 
-// recursiveScanFolder starts the recursive search of git repositories
-// living in the `folder` subtree
-func recursiveScanFolder(folder string) []string {
-	return scanGitFolders(make([]string, 0), folder)
-}
-
-// scan scans a new folder for Git repositories
+// scan 扫描给定文件夹中的 git 仓库
 func scan(folder string) {
-	fmt.Printf("Found folders:\n\n")
-	repositories := recursiveScanFolder(folder)
+	fmt.Printf("开始扫描git仓库，目标路径:%s \n\n", folder)
+
+	repositories := scanGitFolders(folder)
+	if len(repositories) == 0 {
+		fmt.Println("没有找到git仓库")
+		return
+	}
+
 	filePath := getDotFilePath()
 	addNewSliceElementsToFile(filePath, repositories)
-	fmt.Printf("\n\nSuccessfully added\n\n")
+	fmt.Printf("\n添加git仓库成功\n")
 }
 
-// scanGitFolders returns a list of subfolders of `folder` ending with `.git`.
-// Returns the base folder of the repo, the .git folder parent.
-// Recursively searches in the subfolders by passing an existing `folders` slice.
-func scanGitFolders(folders []string, folder string) []string {
-	// trim the last `/`
-	folder = strings.TrimSuffix(folder, "/")
-
-	f, err := os.Open(folder)
-	if err != nil {
-		log.Fatal(err)
-	}
-	files, err := f.Readdir(-1)
-	f.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var path string
-
-	for _, file := range files {
-		if file.IsDir() {
-			path = folder + "/" + file.Name()
-			if file.Name() == ".git" {
-				path = strings.TrimSuffix(path, "/.git")
-				fmt.Println(path)
-				folders = append(folders, path)
-				continue
-			}
-			if file.Name() == "vendor" || file.Name() == "node_modules" {
-				continue
-			}
-			folders = scanGitFolders(folders, path)
+// scanGitFolders 返回包含 .git 文件夹的父文件夹路径
+func scanGitFolders(folder string) []string {
+	var folders []string
+	// 遍历文件夹
+	err := filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" {
+				// 获取 .git 文件夹的父文件夹路径
+				repoPath := filepath.Dir(path)
+				fmt.Println(repoPath)
+				folders = append(folders, repoPath)
+				// 跳过当前文件夹，即不遍历其子目录
+				return filepath.SkipDir
+			}
+
+			if name == "node_modules" {
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
 	}
 
 	return folders
