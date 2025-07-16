@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gopkg.in/src-d/go-git.v4/plumbing/storer"
+	"os"
 	"time"
 
 	"gopkg.in/src-d/go-git.v4"
@@ -122,6 +123,11 @@ func processRepositories(email string) map[int]int {
 
 	// 根据仓库填充提交信息
 	for _, path := range repos {
+		// 检查路径指向的文件夹是否存在
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			fmt.Println("路径不存在：" + path)
+			continue
+		}
 		commits = fillCommits(email, path, commits)
 	}
 
