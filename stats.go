@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gopkg.in/src-d/go-git.v4/plumbing/storer"
 	"os"
+	"sync"
 	"time"
 
 	"gopkg.in/src-d/go-git.v4"
@@ -68,7 +69,7 @@ func countDaysSinceDate(date time.Time) int {
 }
 
 // fillCommits 遍历指定仓库的提交历史，统计用户的提交次数
-func fillCommits(email string, path string, commits map[int]int) map[int]int {
+func fillCommits(email string, path string) map[int]int {
 	// 根据指定路径打开git仓库
 	repo, err := git.PlainOpen(path)
 	if err != nil {
@@ -84,6 +85,9 @@ func fillCommits(email string, path string, commits map[int]int) map[int]int {
 	if err != nil {
 		panic(err)
 	}
+
+	commits := make(map[int]int, daysInLastSixMonths)
+
 	// 遍历仓库提交历史
 	err = iterator.ForEach(func(c *object.Commit) error {
 		daysAgo := countDaysSinceDate(c.Author.When)
@@ -121,6 +125,9 @@ func processRepositories(email string) map[int]int {
 		commits[i] = 0
 	}
 
+	var wa sync.WaitGroup
+	var mu sync.Mutex
+
 	// 根据仓库填充提交信息
 	for _, path := range repos {
 		// 检查路径指向的文件夹是否存在
@@ -128,8 +135,19 @@ func processRepositories(email string) map[int]int {
 			fmt.Println("路径不存在：" + path)
 			continue
 		}
-		commits = fillCommits(email, path, commits)
+		wa.Add(1)
+		go func(path string) {
+			defer wa.Done()
+			newCommits := fillCommits(email, path)
+
+			mu.Lock()
+			for k, v := range newCommits {
+				commits[k] += v
+			}
+			mu.Unlock()
+		}(path)
 	}
+	wa.Wait()
 
 	return commits
 }
