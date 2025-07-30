@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/src-d/go-git.v4/plumbing/storer"
 	"os"
 	"sync"
 	"time"
 
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing/object"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 const outOfRange = 99999
@@ -170,7 +170,7 @@ func printCell(val int, today bool) {
 	}
 
 	if val == 0 {
-		fmt.Printf(escape + "  - " + colorReset)
+		fmt.Print(escape + "  - " + colorReset)
 		return
 	}
 
@@ -210,22 +210,31 @@ func printCommits(commits map[int]int) {
 // printMonths 在第一行打印月份信息
 func printMonths() {
 	now := getBeginningOfDay(time.Now())
-	startMonth := now.AddDate(0, 0, -daysInLastSixMonths)
-	temp := startMonth.AddDate(0, 0, 10)
-	betweenMoths := "            "
-	// 如果首月不足10天，则不显示该月份
-	if startMonth.Month() != temp.Month() {
-		startMonth = temp
-		betweenMoths = "               "
-	}
+	startDate := now.AddDate(0, 0, -daysInLastSixMonths)
 
 	fmt.Printf("       ")
-	for startMonth.Month() != now.Month() {
-		fmt.Printf("%s", startMonth.Month().String()[:3])
-		startMonth = startMonth.AddDate(0, 1, 0)
-		fmt.Printf(betweenMoths)
+
+	// 计算每个位置对应的日期和月份
+	currentDate := startDate
+	lastPrintedMonth := -1
+
+	// 遍历所有列
+	for currentDate.Before(now) || currentDate.Equal(now) {
+		currentMonth := int(currentDate.Month())
+
+		// 如果是新月份的第一次出现，打印月份名称
+		if currentMonth != lastPrintedMonth {
+			fmt.Printf("%s", currentDate.Month().String()[:3])
+			lastPrintedMonth = currentMonth
+		} else {
+			// 如果是同一个月，打印空格占位
+			fmt.Printf("    ")
+		}
+
+		// 移动到下一列
+		currentDate = currentDate.AddDate(0, 0, 7)
 	}
-	fmt.Printf("%s", startMonth.Month().String()[:3])
+
 	fmt.Printf("\n")
 }
 
@@ -241,5 +250,5 @@ func printDayCol(day int) {
 		out = " Sat "
 	}
 
-	fmt.Printf(out)
+	fmt.Print(out)
 }
