@@ -12,8 +12,9 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "git-visible",
 	Short: "Git contribution heatmap from local repositories",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
+		return runShow(cmd, args)
 	},
 }
 
@@ -39,7 +40,7 @@ func initConfig() {
 	viper.SetConfigType("yaml")
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok || os.IsNotExist(err) {
 			return
 		}
 		fmt.Fprintln(os.Stderr, "read config:", err)

@@ -51,7 +51,7 @@ func Load() (Config, error) {
 	v.SetDefault("email", "")
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
 			return Config{}, err
 		}
 	}
