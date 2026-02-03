@@ -28,6 +28,9 @@
 | `--exclude` | `-x` | stringArray | - | 排除目录，可多次指定 |
 | `--dry-run` | - | bool | false | 仅预览不写入 |
 
+**默认排除目录**（无需手动指定）：
+`node_modules`、`vendor`、`.venv`、`venv`、`env`、`__pycache__`、`.tox`、`dist`、`build`、`target`、`out`、`.gradle`、`.m2`、`Pods`、`.npm`、`.yarn`、`.pnpm-store`、`bower_components`、`.idea`、`.vscode`、`.cache`、`.tmp`
+
 ### list
 | 参数 | 类型 | 说明 |
 |------|------|------|

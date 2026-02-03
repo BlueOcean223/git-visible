@@ -92,6 +92,8 @@ git-visible set months 12
 - `--exclude`, `-x`：排除目录（可重复指定；支持相对路径/绝对路径）
 - `--dry-run`：仅预览，不写入仓库列表
 
+> 默认排除目录：`node_modules`、`vendor`、`.venv`、`dist`、`build`、`target`、`.gradle`、`Pods` 等常见依赖/构建目录，无需手动指定。
+
 ### list
 
 - `--verify`：检查仓库路径是否有效（会标注 `(invalid)`）
