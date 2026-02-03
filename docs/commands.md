@@ -1,0 +1,50 @@
+# 命令设计
+
+## 命令列表
+
+| 命令 | 说明 | 实现文件 |
+|------|------|----------|
+| `git-visible` | 默认执行 show | `cmd/root.go` |
+| `git-visible show` | 显示热力图 | `cmd/show.go` |
+| `git-visible add <folder>` | 扫描并添加仓库 | `cmd/add.go` |
+| `git-visible list` | 列出已添加仓库 | `cmd/list.go` |
+| `git-visible remove <path>` | 移除仓库 | `cmd/remove.go` |
+| `git-visible set [key] [value]` | 配置管理 | `cmd/set.go` |
+| `git-visible version` | 显示版本 | `cmd/version.go` |
+
+## 参数设计
+
+### show
+| 参数 | 短写 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--email` | `-e` | stringArray | 配置值 | 邮箱过滤，可多次指定 |
+| `--months` | `-m` | int | 配置值(6) | 统计月数 |
+| `--format` | `-f` | string | table | 输出格式：table/json/csv |
+
+### add
+| 参数 | 短写 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--depth` | `-d` | int | -1 | 递归深度，-1 不限制 |
+| `--exclude` | `-x` | stringArray | - | 排除目录，可多次指定 |
+| `--dry-run` | - | bool | false | 仅预览不写入 |
+
+### list
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--verify` | bool | 检查路径有效性 |
+
+### remove
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--invalid` | bool | 移除所有无效仓库 |
+
+## Cobra 注册方式
+
+所有子命令在各自文件的 `init()` 中注册到 `rootCmd`：
+```go
+func init() {
+    rootCmd.AddCommand(showCmd)
+}
+```
+
+默认命令通过 `rootCmd.RunE` 调用 `runShow()` 实现。
