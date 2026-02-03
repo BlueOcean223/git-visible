@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/schollz/progressbar/v3"
+	"golang.org/x/term"
 )
 
 func ScanRepos(root string, depth int, excludes []string) ([]string, error) {
@@ -26,7 +30,13 @@ func ScanRepos(root string, depth int, excludes []string) ([]string, error) {
 
 	var repos []string
 	seen := make(map[string]struct{})
-	if err := scanDir(rootPath, rootPath, 0, depth, excludes, &repos, seen); err != nil {
+
+	bar := newScanProgressBar()
+	if bar != nil {
+		defer func() { _ = bar.Finish() }()
+	}
+
+	if err := scanDir(bar, rootPath, rootPath, 0, depth, excludes, &repos, seen); err != nil {
 		return nil, err
 	}
 
@@ -46,11 +56,18 @@ func normalizeExcludes(excludes []string) []string {
 	return out
 }
 
-func scanDir(rootPath, dir string, currentDepth, depthLimit int, excludes []string, repos *[]string, seen map[string]struct{}) error {
+func scanDir(bar *progressbar.ProgressBar, rootPath, dir string, currentDepth, depthLimit int, excludes []string, repos *[]string, seen map[string]struct{}) error {
+	if bar != nil {
+		_ = bar.Add(1)
+	}
+
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 		if _, ok := seen[dir]; !ok {
 			seen[dir] = struct{}{}
 			*repos = append(*repos, dir)
+			if bar != nil {
+				bar.Describe(fmt.Sprintf("scanning (%d found)", len(*repos)))
+			}
 		}
 		return nil
 	}
@@ -85,7 +102,7 @@ func scanDir(rootPath, dir string, currentDepth, depthLimit int, excludes []stri
 			continue
 		}
 
-		if err := scanDir(rootPath, child, currentDepth+1, depthLimit, excludes, repos, seen); err != nil {
+		if err := scanDir(bar, rootPath, child, currentDepth+1, depthLimit, excludes, repos, seen); err != nil {
 			return err
 		}
 	}
@@ -122,4 +139,20 @@ func isExcluded(rootPath, path, name string, excludes []string) bool {
 	}
 
 	return false
+}
+
+func newScanProgressBar() *progressbar.ProgressBar {
+	if !term.IsTerminal(int(os.Stderr.Fd())) {
+		return nil
+	}
+
+	return progressbar.NewOptions(
+		-1,
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionClearOnFinish(),
+		progressbar.OptionSetDescription("scanning"),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionSetPredictTime(false),
+		progressbar.OptionThrottle(65*time.Millisecond),
+	)
 }
