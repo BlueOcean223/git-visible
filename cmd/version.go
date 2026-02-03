@@ -6,10 +6,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version 定义当前应用版本号。
+// 可在构建时通过 -ldflags 覆盖此值。
 var (
 	Version = "0.1.0"
 )
 
+// versionCmd 实现 version 子命令，用于显示版本信息。
+// 用法: git-visible version
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
@@ -19,6 +23,7 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// init 注册 version 命令。
 func init() {
 	rootCmd.AddCommand(versionCmd)
 }

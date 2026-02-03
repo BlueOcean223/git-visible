@@ -8,21 +8,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 命令行标志变量
 var (
-	addDepth    int
-	addExcludes []string
-	addDryRun   bool
+	addDepth    int      // 扫描的最大递归深度，-1 表示无限制
+	addExcludes []string // 要排除的目录列表
+	addDryRun   bool     // 预览模式，不实际保存
 )
 
+// addCmd 实现 add 子命令，用于扫描并添加指定目录下的 Git 仓库。
+// 用法: git-visible add <folder>
+// 示例: git-visible add ~/code
 var addCmd = &cobra.Command{
 	Use:   "add <folder>",
 	Short: "Scan and add git repositories under a folder",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// 验证深度参数
 		if addDepth < -1 {
 			return fmt.Errorf("depth must be >= -1, got %d", addDepth)
 		}
 
+		// 扫描指定目录下的所有 Git 仓库
 		found, err := repo.ScanRepos(args[0], addDepth, addExcludes)
 		if err != nil {
 			return err
@@ -34,6 +40,7 @@ var addCmd = &cobra.Command{
 			return nil
 		}
 
+		// 预览模式：仅显示找到的仓库，不保存
 		if addDryRun {
 			fmt.Fprintln(out, "dry run; repositories found:")
 			for _, p := range found {
@@ -42,6 +49,7 @@ var addCmd = &cobra.Command{
 			return nil
 		}
 
+		// 加载已存在的仓库列表，用于去重
 		existing, err := repo.LoadRepos()
 		if err != nil {
 			return err
@@ -51,6 +59,7 @@ var addCmd = &cobra.Command{
 			existingSet[p] = struct{}{}
 		}
 
+		// 添加新发现的仓库（跳过已存在的）
 		added := 0
 		for _, p := range found {
 			if _, ok := existingSet[p]; ok {
@@ -73,6 +82,7 @@ var addCmd = &cobra.Command{
 	},
 }
 
+// init 注册 add 命令及其标志。
 func init() {
 	addCmd.Flags().IntVarP(&addDepth, "depth", "d", -1, "Maximum recursion depth (-1 for unlimited)")
 	addCmd.Flags().StringArrayVarP(&addExcludes, "exclude", "x", nil, "Exclude directories (repeatable)")
