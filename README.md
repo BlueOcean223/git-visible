@@ -96,6 +96,8 @@ git-visible set months 12
 - `--since`：起始日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--until`：结束日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+- `--branch`, `-b`：指定分支（默认 HEAD）
+- `--all-branches`：统计所有本地分支（按 commit hash 去重）
 - `--no-legend`：隐藏图例（仅 `table`）
 - `--no-summary`：隐藏摘要信息（仅 `table`）
 

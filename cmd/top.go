@@ -94,7 +94,7 @@ func runTop(cmd *cobra.Command, _ []string) error {
 		emails = []string{strings.TrimSpace(cfg.Email)}
 	}
 
-	perRepo, collectErr := stats.CollectStatsPerRepo(repos, emails, start, end)
+	perRepo, collectErr := stats.CollectStatsPerRepo(repos, emails, start, end, stats.BranchOption{})
 	if collectErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}

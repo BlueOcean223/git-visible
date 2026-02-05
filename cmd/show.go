@@ -22,6 +22,8 @@ var (
 	showMonths    int      // 统计的月份数
 	showSince     string   // 起始日期：YYYY-MM-DD / YYYY-MM / 2m/1w/1y
 	showUntil     string   // 结束日期：YYYY-MM-DD / YYYY-MM / 2m/1w/1y
+	showBranch    string   // 指定分支名（仅统计该分支）
+	showAllBranch bool     // 是否统计所有分支（去重）
 	showFormat    string   // 输出格式：table/json/csv
 	showNoLegend  bool     // 是否隐藏图例（仅 table 输出）
 	showLegend    bool     // 是否显示图例（仅 table 输出）
@@ -54,6 +56,9 @@ func addShowFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVarP(&showMonths, "months", "m", 0, "Months to include (default: config value; ignored when --since/--until is set)")
 	cmd.Flags().StringVar(&showSince, "since", "", "Start date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	cmd.Flags().StringVar(&showUntil, "until", "", "End date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
+	cmd.Flags().StringVarP(&showBranch, "branch", "b", "", "Branch to include (default: HEAD)")
+	cmd.Flags().BoolVar(&showAllBranch, "all-branches", false, "Include all local branches (deduplicated by commit hash)")
+	cmd.MarkFlagsMutuallyExclusive("branch", "all-branches")
 	cmd.Flags().StringVarP(&showFormat, "format", "f", "table", "Output format: table/json/csv")
 	cmd.Flags().BoolVar(&showNoLegend, "no-legend", false, "Hide legend in table output")
 	cmd.Flags().BoolVar(&showNoSummary, "no-summary", false, "Hide summary")
@@ -106,7 +111,11 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	}
 
 	// 收集所有仓库的提交统计
-	st, collectErr := stats.CollectStats(repos, emails, start, end)
+	branchOpt := stats.BranchOption{
+		Branch:      strings.TrimSpace(showBranch),
+		AllBranches: showAllBranch,
+	}
+	st, collectErr := stats.CollectStats(repos, emails, start, end, branchOpt)
 	if collectErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}

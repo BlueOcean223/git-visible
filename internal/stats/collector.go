@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/schollz/progressbar/v3"
@@ -17,6 +19,16 @@ import (
 
 // maxConcurrency 是并发处理仓库的最大数量，默认为 CPU 核心数。
 var maxConcurrency = runtime.NumCPU()
+
+// BranchOption controls which branch(es) to collect commits from.
+// Default behavior (zero value) is to collect from HEAD only.
+type BranchOption struct {
+	// Branch specifies a single local branch name (e.g. "main").
+	Branch string
+	// AllBranches collects commits from all local branches (refs/heads/*),
+	// de-duplicated by commit hash.
+	AllBranches bool
+}
 
 // CollectStats 并发收集多个仓库的提交统计。
 // 参数:
@@ -27,12 +39,17 @@ var maxConcurrency = runtime.NumCPU()
 //
 // 返回以日期（当天 00:00:00）为键、提交数为值的映射。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
-func CollectStats(repos []string, emails []string, start, end time.Time) (map[time.Time]int, error) {
+func CollectStats(repos []string, emails []string, start, end time.Time, branch BranchOption) (map[time.Time]int, error) {
 	if start.IsZero() {
 		return nil, fmt.Errorf("start must be set")
 	}
 	if end.IsZero() {
 		return nil, fmt.Errorf("end must be set")
+	}
+
+	branch, err := normalizeBranchOption(branch)
+	if err != nil {
+		return nil, err
 	}
 
 	loc := end.Location()
@@ -87,7 +104,7 @@ func CollectStats(repos []string, emails []string, start, end time.Time) (map[ti
 				pmu.Unlock()
 			}()
 
-			stats, err := collectRepo(repoPath, start, end, loc, emailSet)
+			stats, err := collectRepo(repoPath, start, end, loc, emailSet, branch)
 			if err != nil {
 				emu.Lock()
 				errs = append(errs, err)
@@ -112,12 +129,17 @@ func CollectStats(repos []string, emails []string, start, end time.Time) (map[ti
 // CollectStatsPerRepo 并发收集多个仓库的提交统计，并按仓库分别返回结果。
 // 返回 map[repoPath]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
-func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time) (map[string]map[time.Time]int, error) {
+func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, branch BranchOption) (map[string]map[time.Time]int, error) {
 	if start.IsZero() {
 		return nil, fmt.Errorf("start must be set")
 	}
 	if end.IsZero() {
 		return nil, fmt.Errorf("end must be set")
+	}
+
+	branch, err := normalizeBranchOption(branch)
+	if err != nil {
+		return nil, err
 	}
 
 	loc := end.Location()
@@ -170,7 +192,7 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time) 
 				pmu.Unlock()
 			}()
 
-			stats, err := collectRepo(repoPath, start, end, loc, emailSet)
+			stats, err := collectRepo(repoPath, start, end, loc, emailSet, branch)
 			if err != nil {
 				emu.Lock()
 				errs = append(errs, err)
@@ -195,7 +217,7 @@ func CollectStatsMonths(repos []string, emails []string, months int) (map[time.T
 	if err != nil {
 		return nil, err
 	}
-	return CollectStats(repos, emails, start, end)
+	return CollectStats(repos, emails, start, end, BranchOption{})
 }
 
 // newRepoProgressBar 创建仓库处理进度条。
@@ -222,7 +244,7 @@ func newRepoProgressBar(total int) *progressbar.ProgressBar {
 // collectRepo 收集单个仓库在指定时间范围内的提交统计。
 // 遍历从 HEAD 开始的提交历史，按作者邮箱过滤（如果指定），
 // 按日期聚合提交数量。
-func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emailSet map[string]struct{}) (map[time.Time]int, error) {
+func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[time.Time]int, error) {
 	if _, err := os.Stat(repoPath); err != nil {
 		return nil, fmt.Errorf("stat repo %s: %w", repoPath, err)
 	}
@@ -233,47 +255,115 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 		return nil, fmt.Errorf("open repo %s: %w", repoPath, err)
 	}
 
-	// 获取 HEAD 引用
-	ref, err := repo.Head()
-	if err != nil {
-		return nil, fmt.Errorf("head repo %s: %w", repoPath, err)
-	}
-
-	// 获取提交迭代器
-	iterator, err := repo.Log(&git.LogOptions{From: ref.Hash()})
-	if err != nil {
-		return nil, fmt.Errorf("log repo %s: %w", repoPath, err)
-	}
-	defer iterator.Close()
-
-	// 遍历提交，按日期聚合提交数
 	out := make(map[time.Time]int)
-	err = iterator.ForEach(func(c *object.Commit) error {
-		// 邮箱过滤：如果指定了邮箱列表，只统计匹配的提交
-		if len(emailSet) > 0 {
-			if _, ok := emailSet[c.Author.Email]; !ok {
+	startPoints, err := collectStartPoints(repo, repoPath, branch)
+	if err != nil {
+		return nil, err
+	}
+
+	seenCommits := make(map[plumbing.Hash]struct{})
+
+	for _, from := range startPoints {
+		iterator, err := repo.Log(&git.LogOptions{From: from})
+		if err != nil {
+			return nil, fmt.Errorf("log repo %s: %w", repoPath, err)
+		}
+
+		iterErr := iterator.ForEach(func(c *object.Commit) error {
+			commitDay := beginningOfDay(c.Author.When, loc)
+			if commitDay.After(end) {
 				return nil
 			}
-		}
+			if commitDay.Before(start) {
+				return storer.ErrStop
+			}
 
-		commitDay := beginningOfDay(c.Author.When, loc)
-		// 跳过未来的提交（理论上不应该发生）
-		if commitDay.After(end) {
+			if len(emailSet) > 0 {
+				if _, ok := emailSet[c.Author.Email]; !ok {
+					return nil
+				}
+			}
+
+			if branch.AllBranches {
+				if _, ok := seenCommits[c.Hash]; ok {
+					return nil
+				}
+				seenCommits[c.Hash] = struct{}{}
+			}
+
+			out[commitDay]++
 			return nil
+		})
+		iterator.Close()
+		if iterErr != nil && !errors.Is(iterErr, storer.ErrStop) {
+			return nil, fmt.Errorf("iterate repo %s: %w", repoPath, iterErr)
 		}
-		// 提交时间早于统计范围，可以停止遍历（提交按时间倒序排列）
-		if commitDay.Before(start) {
-			return storer.ErrStop
-		}
-
-		out[commitDay]++
-		return nil
-	})
-	if err != nil && !errors.Is(err, storer.ErrStop) {
-		return nil, fmt.Errorf("iterate repo %s: %w", repoPath, err)
 	}
 
 	return out, nil
+}
+
+func normalizeBranchOption(opt BranchOption) (BranchOption, error) {
+	opt.Branch = strings.TrimSpace(opt.Branch)
+	if opt.Branch != "" && opt.AllBranches {
+		return BranchOption{}, fmt.Errorf("--branch and --all-branches are mutually exclusive")
+	}
+	return opt, nil
+}
+
+func collectStartPoints(repo *git.Repository, repoPath string, branch BranchOption) ([]plumbing.Hash, error) {
+	switch {
+	case branch.AllBranches:
+		iter, err := repo.Branches()
+		if err != nil {
+			return nil, fmt.Errorf("list branches repo %s: %w", repoPath, err)
+		}
+		defer iter.Close()
+
+		tips := make([]plumbing.Hash, 0)
+		seenTips := make(map[plumbing.Hash]struct{})
+		err = iter.ForEach(func(ref *plumbing.Reference) error {
+			if ref == nil {
+				return nil
+			}
+			h := ref.Hash()
+			if h.IsZero() {
+				return nil
+			}
+			if _, ok := seenTips[h]; ok {
+				return nil
+			}
+			seenTips[h] = struct{}{}
+			tips = append(tips, h)
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("iterate branches repo %s: %w", repoPath, err)
+		}
+		return tips, nil
+	case branch.Branch != "":
+		refName := plumbing.NewBranchReferenceName(branch.Branch)
+		if strings.HasPrefix(branch.Branch, "refs/") {
+			refName = plumbing.ReferenceName(branch.Branch)
+		}
+		ref, err := repo.Reference(refName, true)
+		if err != nil {
+			return nil, fmt.Errorf("repo %s: branch %q not found", repoPath, branch.Branch)
+		}
+		if ref.Hash().IsZero() {
+			return nil, fmt.Errorf("repo %s: branch %q has no commits", repoPath, branch.Branch)
+		}
+		return []plumbing.Hash{ref.Hash()}, nil
+	default:
+		ref, err := repo.Head()
+		if err != nil {
+			return nil, fmt.Errorf("head repo %s: %w", repoPath, err)
+		}
+		if ref.Hash().IsZero() {
+			return nil, fmt.Errorf("repo %s: HEAD has no commits", repoPath)
+		}
+		return []plumbing.Hash{ref.Hash()}, nil
+	}
 }
 
 // beginningOfDay 返回给定时间当天 00:00:00 的时间点。
