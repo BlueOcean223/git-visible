@@ -21,15 +21,25 @@ const (
 // 热力图以周为列、星期几为行，使用不同颜色表示提交数量级别。
 // 返回包含 ANSI 颜色代码的字符串，可直接输出到终端。
 func RenderHeatmap(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, true)
+	return renderHeatmap(stats, months, true, true)
 }
 
 // RenderHeatmapNoLegend 渲染热力图但不包含图例。
 func RenderHeatmapNoLegend(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, false)
+	return renderHeatmap(stats, months, false, true)
 }
 
-func renderHeatmap(stats map[time.Time]int, months int, includeLegend bool) string {
+// RenderHeatmapNoSummary 渲染热力图但不包含摘要信息。
+func RenderHeatmapNoSummary(stats map[time.Time]int, months int) string {
+	return renderHeatmap(stats, months, true, false)
+}
+
+// RenderHeatmapNoLegendNoSummary 渲染热力图但不包含图例和摘要信息。
+func RenderHeatmapNoLegendNoSummary(stats map[time.Time]int, months int) string {
+	return renderHeatmap(stats, months, false, false)
+}
+
+func renderHeatmap(stats map[time.Time]int, months int, includeLegend bool, includeSummary bool) string {
 	if months <= 0 {
 		return ""
 	}
@@ -73,6 +83,10 @@ func renderHeatmap(stats map[time.Time]int, months int, includeLegend bool) stri
 
 	if includeLegend {
 		b.WriteString(RenderLegend())
+	}
+
+	if includeSummary {
+		b.WriteString(RenderSummary(CalculateSummary(stats)))
 	}
 
 	return b.String()

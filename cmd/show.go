@@ -18,11 +18,13 @@ import (
 
 // 命令行标志变量
 var (
-	showEmails []string // 要过滤的邮箱列表
-	showMonths int      // 统计的月份数
-	showFormat string   // 输出格式：table/json/csv
-	showNoLegend bool   // 是否隐藏图例（仅 table 输出）
-	showLegend   bool   // 是否显示图例（仅 table 输出）
+	showEmails    []string // 要过滤的邮箱列表
+	showMonths    int      // 统计的月份数
+	showFormat    string   // 输出格式：table/json/csv
+	showNoLegend  bool     // 是否隐藏图例（仅 table 输出）
+	showLegend    bool     // 是否显示图例（仅 table 输出）
+	showNoSummary bool     // 是否隐藏摘要信息
+	showSummary   bool     // 是否显示摘要信息
 )
 
 // showCmd 实现 show 子命令，用于显示贡献热力图。
@@ -50,6 +52,7 @@ func addShowFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVarP(&showMonths, "months", "m", 0, "Months to include (default: config value)")
 	cmd.Flags().StringVarP(&showFormat, "format", "f", "table", "Output format: table/json/csv")
 	cmd.Flags().BoolVar(&showNoLegend, "no-legend", false, "Hide legend in table output")
+	cmd.Flags().BoolVar(&showNoSummary, "no-summary", false, "Hide summary")
 }
 
 // runShow 是 show 命令的核心逻辑。
@@ -95,18 +98,24 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	}
 
 	showLegend = !showNoLegend
+	showSummary = !showNoSummary
 
 	// 根据指定格式输出结果
 	switch strings.ToLower(strings.TrimSpace(showFormat)) {
 	case "", "table":
-		if showLegend {
+		switch {
+		case showLegend && showSummary:
 			fmt.Fprint(out, stats.RenderHeatmap(st, months))
-			return nil
+		case showLegend && !showSummary:
+			fmt.Fprint(out, stats.RenderHeatmapNoSummary(st, months))
+		case !showLegend && showSummary:
+			fmt.Fprint(out, stats.RenderHeatmapNoLegend(st, months))
+		default:
+			fmt.Fprint(out, stats.RenderHeatmapNoLegendNoSummary(st, months))
 		}
-		fmt.Fprint(out, stats.RenderHeatmapNoLegend(st, months))
 		return nil
 	case "json":
-		return writeJSON(out, st)
+		return writeJSON(out, st, showSummary)
 	case "csv":
 		return writeCSV(out, st)
 	default:
@@ -120,9 +129,39 @@ type dayStat struct {
 	Count int    `json:"count"` // 当日提交数
 }
 
+type summaryStreak struct {
+	Days  int    `json:"days"`
+	Start string `json:"start,omitempty"`
+	End   string `json:"end,omitempty"`
+}
+
+type summaryWeekday struct {
+	Weekday string `json:"weekday"`
+	Commits int    `json:"commits"`
+}
+
+type summaryPeakDay struct {
+	Date    string `json:"date,omitempty"`
+	Commits int    `json:"commits"`
+}
+
+type summaryOut struct {
+	TotalCommits      int            `json:"totalCommits"`
+	ActiveDays        int            `json:"activeDays"`
+	CurrentStreak     int            `json:"currentStreak"`
+	LongestStreak     summaryStreak  `json:"longestStreak"`
+	MostActiveWeekday summaryWeekday `json:"mostActiveWeekday"`
+	PeakDay           summaryPeakDay `json:"peakDay"`
+}
+
+type jsonOutput struct {
+	Days    []dayStat   `json:"days"`
+	Summary *summaryOut `json:"summary,omitempty"`
+}
+
 // writeJSON 将统计数据以 JSON 格式输出。
-// 输出为按日期排序的数组，每个元素包含日期和提交数。
-func writeJSON(out io.Writer, st map[time.Time]int) error {
+// 输出包含 days 数组与可选 summary 字段。
+func writeJSON(out io.Writer, st map[time.Time]int, includeSummary bool) error {
 	// 按日期排序
 	keys := make([]time.Time, 0, len(st))
 	for k := range st {
@@ -139,9 +178,39 @@ func writeJSON(out io.Writer, st map[time.Time]int) error {
 		})
 	}
 
+	outObj := jsonOutput{Days: rows}
+	if includeSummary {
+		s := stats.CalculateSummary(st)
+
+		so := summaryOut{
+			TotalCommits:  s.TotalCommits,
+			ActiveDays:    s.ActiveDays,
+			CurrentStreak: s.CurrentStreak,
+			LongestStreak: summaryStreak{Days: s.LongestStreak.Days},
+			MostActiveWeekday: summaryWeekday{
+				Weekday: weekdayAbbrev(s.MostActiveWeekday.Weekday),
+				Commits: s.MostActiveWeekday.Commits,
+			},
+			PeakDay: summaryPeakDay{
+				Commits: s.PeakDay.Commits,
+			},
+		}
+		if !s.LongestStreak.Start.IsZero() {
+			so.LongestStreak.Start = s.LongestStreak.Start.Format("2006-01-02")
+		}
+		if !s.LongestStreak.End.IsZero() {
+			so.LongestStreak.End = s.LongestStreak.End.Format("2006-01-02")
+		}
+		if !s.PeakDay.Date.IsZero() {
+			so.PeakDay.Date = s.PeakDay.Date.Format("2006-01-02")
+		}
+
+		outObj.Summary = &so
+	}
+
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
-	return enc.Encode(rows)
+	return enc.Encode(outObj)
 }
 
 // writeCSV 将统计数据以 CSV 格式输出。
@@ -167,4 +236,12 @@ func writeCSV(out io.Writer, st map[time.Time]int) error {
 	}
 	w.Flush()
 	return w.Error()
+}
+
+func weekdayAbbrev(wd time.Weekday) string {
+	name := wd.String()
+	if len(name) > 3 {
+		return name[:3]
+	}
+	return name
 }

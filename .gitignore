@@ -26,6 +26,7 @@ vendor/
 *.swp
 *.swo
 *~
+.claude/
 
 # OS generated
 .DS_Store
