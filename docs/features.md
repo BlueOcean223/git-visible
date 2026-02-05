@@ -9,8 +9,11 @@
 
 ### 2. 统计展示
 - **热力图** (`show`)：GitHub 风格的贡献热力图
+- **仓库排行** (`top`)：按提交数排行的仓库列表
+- **对比统计** (`compare`)：多邮箱/时间段贡献对比
 - **邮箱过滤**：支持多邮箱筛选
-- **时间范围**：可配置统计月数
+- **分支过滤**：支持指定分支或统计所有分支
+- **时间范围**：可配置统计月数，支持 --since/--until
 - **多格式输出**：table（默认）、json、csv
 
 ### 3. 配置管理
@@ -26,6 +29,8 @@
 | 加载仓库 | `cmd/show.go` | `internal/repo/storage.go:LoadRepos()` |
 | 收集提交 | `cmd/show.go` | `internal/stats/collector.go:CollectStats()` |
 | 渲染热力图 | `cmd/show.go` | `internal/stats/renderer.go:RenderHeatmap()` |
+| 仓库排行 | `cmd/top.go` | `internal/stats/ranking.go:RankRepositories()` |
+| 对比统计 | `cmd/compare.go` | `internal/stats/compare.go:CalculateCompareMetrics()` |
 | 读写配置 | `cmd/set.go` | `internal/config/config.go:Load()/Save()` |
 
 ## 扩展点

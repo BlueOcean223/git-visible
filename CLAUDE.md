@@ -24,10 +24,10 @@ CLI tool using Cobra/Viper that aggregates git commit history from multiple loca
 **Entry flow**: `main.go` → `cmd.Execute()` → Cobra routes to subcommand
 
 **Packages**:
-- `cmd/` - Cobra commands (root, show, add, list, remove, set, version)
+- `cmd/` - Cobra commands (root, show, top, compare, add, list, remove, set, version)
 - `internal/config/` - Config file management (`~/.config/git-visible/config.yaml`)
 - `internal/repo/` - Repository storage (`~/.config/git-visible/repos`) and directory scanning
-- `internal/stats/` - Commit collection (concurrent via go-git) and heatmap rendering
+- `internal/stats/` - Commit collection, heatmap rendering, ranking, and comparison metrics
 
 **Key dependencies**: go-git (git operations), cobra (CLI), viper (config), progressbar (progress display)
 

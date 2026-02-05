@@ -30,6 +30,7 @@ go run .
 
 - `git-visible show`：显示贡献热力图
 - `git-visible top`：显示贡献最多的仓库排行榜
+- `git-visible compare`：对比多个邮箱或时间段的贡献统计
 - `git-visible add <folder>`：扫描并添加目录下的 Git 仓库
 - `git-visible list`：列出已添加的仓库
 - `git-visible remove <path>`：移除指定仓库
@@ -79,6 +80,19 @@ git-visible top -n 5
 git-visible top --all -f json
 ```
 
+对比多个邮箱的贡献：
+
+```bash
+git-visible compare -e work@company.com -e personal@gmail.com
+```
+
+对比不同时间段：
+
+```bash
+git-visible compare --period 2024-H1 --period 2024-H2
+git-visible compare --year 2024 --year 2025
+```
+
 查看/设置默认配置：
 
 ```bash
@@ -110,6 +124,16 @@ git-visible set months 12
 - `--since`：起始日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--until`：结束日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+
+### compare
+
+- `--email`, `-e`：对比的邮箱（可重复指定，至少 2 个）
+- `--period`：对比的时间段（可重复指定，至少 2 个）
+  - 格式：`YYYY`（整年）、`YYYY-H1`/`YYYY-H2`（半年）、`YYYY-Q1`~`YYYY-Q4`（季度）、`YYYY-MM`（单月）
+- `--year`：对比的年份（`--period YYYY` 的快捷方式）
+- `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+
+> 注：`--email` 与 `--period`/`--year` 互斥，不能同时使用。
 
 ### add
 

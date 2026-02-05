@@ -6,6 +6,8 @@
 |------|------|----------|
 | `git-visible` | 默认执行 show | `cmd/root.go` |
 | `git-visible show` | 显示热力图 | `cmd/show.go` |
+| `git-visible top` | 仓库贡献排行榜 | `cmd/top.go` |
+| `git-visible compare` | 对比邮箱/时间段统计 | `cmd/compare.go` |
 | `git-visible add <folder>` | 扫描并添加仓库 | `cmd/add.go` |
 | `git-visible list` | 列出已添加仓库 | `cmd/list.go` |
 | `git-visible remove <path>` | 移除仓库 | `cmd/remove.go` |
@@ -19,7 +21,34 @@
 |------|------|------|--------|------|
 | `--email` | `-e` | stringArray | 配置值 | 邮箱过滤，可多次指定 |
 | `--months` | `-m` | int | 配置值(6) | 统计月数 |
+| `--since` | - | string | - | 起始日期 |
+| `--until` | - | string | - | 结束日期 |
+| `--branch` | `-b` | string | - | 指定分支（默认 HEAD） |
+| `--all-branches` | - | bool | false | 统计所有本地分支（去重） |
 | `--format` | `-f` | string | table | 输出格式：table/json/csv |
+| `--no-legend` | - | bool | false | 隐藏图例 |
+| `--no-summary` | - | bool | false | 隐藏摘要信息 |
+
+### top
+| 参数 | 短写 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--number` | `-n` | int | 10 | 显示数量 |
+| `--all` | - | bool | false | 显示全部仓库 |
+| `--email` | `-e` | stringArray | 配置值 | 邮箱过滤 |
+| `--months` | `-m` | int | 配置值 | 统计月数 |
+| `--since` | - | string | - | 起始日期 |
+| `--until` | - | string | - | 结束日期 |
+| `--format` | `-f` | string | table | 输出格式：table/json/csv |
+
+### compare
+| 参数 | 短写 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--email` | `-e` | stringArray | - | 对比的邮箱（至少 2 个） |
+| `--period` | - | stringArray | - | 对比的时间段（至少 2 个） |
+| `--year` | - | intSlice | - | 对比的年份（--period YYYY 快捷方式） |
+| `--format` | `-f` | string | table | 输出格式：table/json/csv |
+
+**时间段格式**：`YYYY`（整年）、`YYYY-H1`/`YYYY-H2`（半年）、`YYYY-Q1`~`YYYY-Q4`（季度）、`YYYY-MM`（单月）
 
 ### add
 | 参数 | 短写 | 类型 | 默认值 | 说明 |
