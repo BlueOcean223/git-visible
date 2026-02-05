@@ -152,22 +152,26 @@ type dayStat struct {
 	Count int    `json:"count"` // 当日提交数
 }
 
+// summaryStreak 表示 JSON 输出中的连续提交天数信息。
 type summaryStreak struct {
 	Days  int    `json:"days"`
 	Start string `json:"start,omitempty"`
 	End   string `json:"end,omitempty"`
 }
 
+// summaryWeekday 表示 JSON 输出中最活跃的星期几信息。
 type summaryWeekday struct {
 	Weekday string `json:"weekday"`
 	Commits int    `json:"commits"`
 }
 
+// summaryPeakDay 表示 JSON 输出中提交数最多的单日信息。
 type summaryPeakDay struct {
 	Date    string `json:"date,omitempty"`
 	Commits int    `json:"commits"`
 }
 
+// summaryOut 表示 JSON 输出中的统计摘要。
 type summaryOut struct {
 	TotalCommits      int            `json:"totalCommits"`
 	ActiveDays        int            `json:"activeDays"`
@@ -177,6 +181,7 @@ type summaryOut struct {
 	PeakDay           summaryPeakDay `json:"peakDay"`
 }
 
+// jsonOutput 是 show 命令 JSON 格式的顶层输出结构。
 type jsonOutput struct {
 	Days    []dayStat   `json:"days"`
 	Summary *summaryOut `json:"summary,omitempty"`
@@ -261,6 +266,7 @@ func writeCSV(out io.Writer, st map[time.Time]int) error {
 	return w.Error()
 }
 
+// weekdayAbbrev 返回星期几的 3 字符缩写（如 Mon, Tue）。
 func weekdayAbbrev(wd time.Weekday) string {
 	name := wd.String()
 	if len(name) > 3 {

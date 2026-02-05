@@ -17,11 +17,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 命令行标志变量
 var (
-	compareEmails  []string
-	comparePeriods []string
-	compareYears   []int
-	compareFormat  string
+	compareEmails  []string // 要对比的邮箱列表
+	comparePeriods []string // 要对比的时间段列表
+	compareYears   []int    // 要对比的年份列表（--period YYYY 的快捷方式）
+	compareFormat  string   // 输出格式：table/json/csv
 )
 
 // compareCmd 实现 compare 子命令，用于对比多个邮箱或多个时间段的贡献统计。
@@ -36,6 +37,7 @@ var compareCmd = &cobra.Command{
 	RunE:  runCompare,
 }
 
+// init 注册 compare 命令及其标志。
 func init() {
 	compareCmd.Flags().StringArrayVarP(&compareEmails, "email", "e", nil, "Emails to compare (repeatable)")
 	compareCmd.Flags().StringArrayVar(&comparePeriods, "period", nil, "Periods to compare (repeatable): YYYY, YYYY-HN, YYYY-QN, YYYY-MM")
@@ -48,22 +50,27 @@ func init() {
 	rootCmd.AddCommand(compareCmd)
 }
 
+// emailCompareItem 表示按邮箱对比时的单项结果。
 type emailCompareItem struct {
 	Email   string
 	Metrics stats.CompareMetrics
 }
 
+// periodCompareItem 表示按时间段对比时的单项结果。
 type periodCompareItem struct {
 	Period  stats.Period
 	Metrics stats.CompareMetrics
 }
 
+// runCompare 是 compare 命令的核心逻辑。
 func runCompare(cmd *cobra.Command, _ []string) error {
+	// 加载配置获取默认值
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 
+	// 加载已添加的仓库列表
 	repos, err := repo.LoadRepos()
 	if err != nil {
 		return err
@@ -77,6 +84,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 
 	format := strings.ToLower(strings.TrimSpace(compareFormat))
 
+	// 清理并合并对比参数：--period 和 --year 合并为统一的时间段列表
 	emails := cleanNonEmpty(compareEmails)
 	periodArgs := cleanNonEmpty(append(append([]string{}, comparePeriods...), yearsToPeriods(compareYears)...))
 
@@ -147,6 +155,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 	}
 }
 
+// collectCompareByEmail 按邮箱收集对比数据。
 func collectCompareByEmail(repos []string, emails []string, start, end time.Time) ([]emailCompareItem, error) {
 	items := make([]emailCompareItem, 0, len(emails))
 	var errs []error
@@ -163,6 +172,7 @@ func collectCompareByEmail(repos []string, emails []string, start, end time.Time
 	return items, errors.Join(errs...)
 }
 
+// collectCompareByPeriod 按时间段收集对比数据。
 func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string) ([]periodCompareItem, error) {
 	items := make([]periodCompareItem, 0, len(periods))
 	var errs []error
@@ -179,6 +189,7 @@ func collectCompareByPeriod(repos []string, periods []stats.Period, emails []str
 	return items, errors.Join(errs...)
 }
 
+// yearsToPeriods 将年份列表转换为 YYYY 格式的时间段字符串。
 func yearsToPeriods(years []int) []string {
 	if len(years) == 0 {
 		return nil
@@ -193,6 +204,7 @@ func yearsToPeriods(years []int) []string {
 	return out
 }
 
+// cleanNonEmpty 过滤掉空字符串并去除首尾空白。
 func cleanNonEmpty(in []string) []string {
 	out := make([]string, 0, len(in))
 	for _, s := range in {
@@ -205,6 +217,7 @@ func cleanNonEmpty(in []string) []string {
 	return out
 }
 
+// writeCompareEmailTable 以表格格式输出邮箱对比结果。
 func writeCompareEmailTable(out io.Writer, items []emailCompareItem) error {
 	if len(items) == 0 {
 		return nil
@@ -239,6 +252,7 @@ func writeCompareEmailTable(out io.Writer, items []emailCompareItem) error {
 	return writeCompareMatrixTable(out, headers, metricLabels, values)
 }
 
+// writeComparePeriodTable 以表格格式输出时间段对比结果。
 func writeComparePeriodTable(out io.Writer, items []periodCompareItem) error {
 	if len(items) == 0 {
 		return nil
@@ -296,6 +310,7 @@ func writeComparePeriodTable(out io.Writer, items []periodCompareItem) error {
 	return writeCompareMatrixTable(out, headers, metricLabels, values)
 }
 
+// writeCompareMatrixTable 输出矩阵形式的对比表格（行=指标，列=对比项）。
 func writeCompareMatrixTable(out io.Writer, headers []string, rowLabels []string, values [][]string) error {
 	if len(headers) == 0 || len(rowLabels) == 0 || len(values) != len(rowLabels) {
 		return nil
@@ -356,6 +371,7 @@ func writeCompareMatrixTable(out io.Writer, headers []string, rowLabels []string
 	return nil
 }
 
+// mostActiveDayLabel 返回最活跃星期几的标签。
 func mostActiveDayLabel(m stats.CompareMetrics) string {
 	if m.MostActiveWeekdayCommits <= 0 {
 		return "-"
@@ -363,6 +379,7 @@ func mostActiveDayLabel(m stats.CompareMetrics) string {
 	return weekdayAbbrev(m.MostActiveWeekday)
 }
 
+// streakLabel 返回连续天数的显示标签（单复数处理）。
 func streakLabel(days int) string {
 	if days == 1 {
 		return "1 day"
@@ -370,6 +387,7 @@ func streakLabel(days int) string {
 	return fmt.Sprintf("%d days", days)
 }
 
+// percentLabel 返回百分比变化的显示标签（带正负号）。
 func percentLabel(pc stats.PercentChange) string {
 	if !pc.Defined {
 		return "N/A"
@@ -382,16 +400,19 @@ func percentLabel(pc stats.PercentChange) string {
 	return fmt.Sprintf("%s%.1f%%", sign, p)
 }
 
+// round1 将浮点数四舍五入到 1 位小数。
 func round1(v float64) float64 {
 	return math.Round(v*10) / 10
 }
 
+// compareJSONOutput 是 JSON 输出的顶层结构。
 type compareJSONOutput struct {
 	Dimension string             `json:"dimension"`
 	Items     []compareJSONItem  `json:"items"`
 	Changes   []compareJSONDelta `json:"changes,omitempty"`
 }
 
+// compareJSONItem 是 JSON 输出中的单个对比项。
 type compareJSONItem struct {
 	Label              string  `json:"label"`
 	Start              string  `json:"start,omitempty"`
@@ -404,6 +425,7 @@ type compareJSONItem struct {
 	LongestStreakLabel string  `json:"longestStreak,omitempty"`
 }
 
+// compareJSONDelta 是 JSON 输出中相邻时间段之间的变化量。
 type compareJSONDelta struct {
 	From                string   `json:"from"`
 	To                  string   `json:"to"`
@@ -412,6 +434,7 @@ type compareJSONDelta struct {
 	AvgCommitsPerDayPct *float64 `json:"avgCommitsPerDayPercent"`
 }
 
+// writeCompareEmailJSON 以 JSON 格式输出邮箱对比结果。
 func writeCompareEmailJSON(out io.Writer, items []emailCompareItem) error {
 	outItems := make([]compareJSONItem, 0, len(items))
 	for _, it := range items {
@@ -434,6 +457,7 @@ func writeCompareEmailJSON(out io.Writer, items []emailCompareItem) error {
 	})
 }
 
+// writeComparePeriodJSON 以 JSON 格式输出时间段对比结果。
 func writeComparePeriodJSON(out io.Writer, items []periodCompareItem) error {
 	outItems := make([]compareJSONItem, 0, len(items))
 	for _, it := range items {
@@ -477,6 +501,7 @@ func writeComparePeriodJSON(out io.Writer, items []periodCompareItem) error {
 	})
 }
 
+// percentPtr 将 PercentChange 转换为指针，未定义时返回 nil。
 func percentPtr(pc stats.PercentChange) *float64 {
 	if !pc.Defined {
 		return nil
@@ -485,6 +510,7 @@ func percentPtr(pc stats.PercentChange) *float64 {
 	return &v
 }
 
+// writeCompareEmailCSV 以 CSV 格式输出邮箱对比结果。
 func writeCompareEmailCSV(out io.Writer, items []emailCompareItem) error {
 	if len(items) == 0 {
 		return nil
@@ -524,6 +550,7 @@ func writeCompareEmailCSV(out io.Writer, items []emailCompareItem) error {
 	return w.Error()
 }
 
+// writeComparePeriodCSV 以 CSV 格式输出时间段对比结果。
 func writeComparePeriodCSV(out io.Writer, items []periodCompareItem) error {
 	if len(items) == 0 {
 		return nil

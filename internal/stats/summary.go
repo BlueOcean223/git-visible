@@ -188,6 +188,7 @@ func RenderSummary(s Summary) string {
 	return b.String()
 }
 
+// weekdayAbbrev 返回星期几的 3 字符缩写（如 Mon, Tue）。
 func weekdayAbbrev(wd time.Weekday) string {
 	name := wd.String()
 	if len(name) > 3 {
@@ -196,10 +197,12 @@ func weekdayAbbrev(wd time.Weekday) string {
 	return name
 }
 
+// formatShortDate 格式化日期为短格式（如 Jan 02）。
 func formatShortDate(t time.Time) string {
 	return t.Format("Jan 02")
 }
 
+// pluralize 根据数量返回单数或复数形式。
 func pluralize(n int, singular, plural string) string {
 	if n == 1 {
 		return singular

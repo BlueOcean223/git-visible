@@ -18,11 +18,12 @@ type RepoRanking struct {
 	TotalCommits int        `json:"totalCommits"`
 }
 
+// percentRemainder 用于百分比舍入分配算法（Largest Remainder Method）。
 type percentRemainder struct {
-	index     int
-	remainder int
-	commits   int
-	repo      string
+	index     int    // 在 rows 中的索引
+	remainder int    // 除法余数
+	commits   int    // 提交数（用于平局排序）
+	repo      string // 仓库路径（用于平局排序）
 }
 
 // RankRepositories 计算仓库提交排行榜。

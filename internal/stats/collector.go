@@ -271,19 +271,23 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 
 		iterErr := iterator.ForEach(func(c *object.Commit) error {
 			commitDay := beginningOfDay(c.Author.When, loc)
+			// 跳过超出结束日期的提交（git log 按时间倒序，早期提交可能乱序）
 			if commitDay.After(end) {
 				return nil
 			}
+			// 提交早于起始日期时停止遍历（利用时间倒序特性提前退出）
 			if commitDay.Before(start) {
 				return storer.ErrStop
 			}
 
+			// 邮箱过滤：仅统计指定作者的提交
 			if len(emailSet) > 0 {
 				if _, ok := emailSet[c.Author.Email]; !ok {
 					return nil
 				}
 			}
 
+			// 多分支模式下按 commit hash 去重，避免合并提交被重复计数
 			if branch.AllBranches {
 				if _, ok := seenCommits[c.Hash]; ok {
 					return nil
@@ -303,6 +307,7 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 	return out, nil
 }
 
+// normalizeBranchOption 验证并标准化分支选项。
 func normalizeBranchOption(opt BranchOption) (BranchOption, error) {
 	opt.Branch = strings.TrimSpace(opt.Branch)
 	if opt.Branch != "" && opt.AllBranches {
@@ -311,6 +316,7 @@ func normalizeBranchOption(opt BranchOption) (BranchOption, error) {
 	return opt, nil
 }
 
+// collectStartPoints 根据分支选项确定遍历的起始 commit hash 列表。
 func collectStartPoints(repo *git.Repository, repoPath string, branch BranchOption) ([]plumbing.Hash, error) {
 	switch {
 	case branch.AllBranches:

@@ -28,9 +28,15 @@
 | 存储仓库 | `cmd/add.go` | `internal/repo/storage.go:AddRepo()` |
 | 加载仓库 | `cmd/show.go` | `internal/repo/storage.go:LoadRepos()` |
 | 收集提交 | `cmd/show.go` | `internal/stats/collector.go:CollectStats()` |
-| 渲染热力图 | `cmd/show.go` | `internal/stats/renderer.go:RenderHeatmap()` |
+| 按仓库收集 | `cmd/top.go` | `internal/stats/collector.go:CollectStatsPerRepo()` |
+| 时间范围计算 | `cmd/show.go` | `internal/stats/timerange.go:TimeRange()/ParseDate()` |
+| 渲染热力图 | `cmd/show.go` | `internal/stats/renderer.go:RenderHeatmapRange()` |
+| 渲染图例 | `cmd/show.go` | `internal/stats/legend.go:RenderLegend()` |
+| 统计摘要 | `cmd/show.go` | `internal/stats/summary.go:CalculateSummary()/RenderSummary()` |
 | 仓库排行 | `cmd/top.go` | `internal/stats/ranking.go:RankRepositories()` |
 | 对比统计 | `cmd/compare.go` | `internal/stats/compare.go:CalculateCompareMetrics()` |
+| 时间段解析 | `cmd/compare.go` | `internal/stats/compare.go:ParsePeriod()` |
+| 百分比变化 | `cmd/compare.go` | `internal/stats/compare.go:CalculatePercentChange()` |
 | 读写配置 | `cmd/set.go` | `internal/config/config.go:Load()/Save()` |
 
 ## 扩展点

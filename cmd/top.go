@@ -17,15 +17,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 命令行标志变量
 var (
-	topEmails []string
-	topMonths int
-	topSince  string
-	topUntil  string
-	topFormat string
+	topEmails []string // 要过滤的邮箱列表
+	topMonths int      // 统计的月份数
+	topSince  string   // 起始日期
+	topUntil  string   // 结束日期
+	topFormat string   // 输出格式：table/json/csv
 
-	topNumber int
-	topAll    bool
+	topNumber int  // 显示的仓库数量
+	topAll    bool // 是否显示所有仓库
 )
 
 // topCmd 实现 top 子命令，用于显示贡献最多的仓库排行榜。
@@ -37,6 +38,7 @@ var topCmd = &cobra.Command{
 	RunE:  runTop,
 }
 
+// init 注册 top 命令及其标志。
 func init() {
 	topCmd.Flags().IntVarP(&topNumber, "number", "n", 10, "Number of repositories to show")
 	topCmd.Flags().BoolVar(&topAll, "all", false, "Show all repositories")
@@ -51,12 +53,15 @@ func init() {
 	rootCmd.AddCommand(topCmd)
 }
 
+// runTop 是 top 命令的核心逻辑，收集并输出仓库提交排行榜。
 func runTop(cmd *cobra.Command, _ []string) error {
+	// 加载配置获取默认值
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 
+	// 加载已添加的仓库列表
 	repos, err := repo.LoadRepos()
 	if err != nil {
 		return err
@@ -75,6 +80,7 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	since := strings.TrimSpace(topSince)
 	until := strings.TrimSpace(topUntil)
 
+	// 确定统计月份数：优先使用命令行参数，否则使用配置值
 	months := topMonths
 	if months == 0 {
 		months = cfg.Months
@@ -89,23 +95,28 @@ func runTop(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// 确定邮箱过滤条件：优先使用命令行参数，否则使用配置值
 	emails := topEmails
 	if len(emails) == 0 && strings.TrimSpace(cfg.Email) != "" {
 		emails = []string{strings.TrimSpace(cfg.Email)}
 	}
 
+	// 按仓库分别收集提交统计
 	perRepo, collectErr := stats.CollectStatsPerRepo(repos, emails, start, end, stats.BranchOption{})
 	if collectErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}
 
+	// 确定显示数量：--all 时 limit=0 表示不限制
 	limit := topNumber
 	if topAll {
 		limit = 0
 	}
 
+	// 计算排行榜（按提交数降序，百分比保证合计 100.0%）
 	ranking := stats.RankRepositories(perRepo, limit)
 
+	// 根据指定格式输出结果
 	format := strings.ToLower(strings.TrimSpace(topFormat))
 	switch format {
 	case "", "table":
@@ -123,6 +134,7 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	}
 }
 
+// topRangeLabel 生成时间范围的显示标签。
 func topRangeLabel(since, until string, months int, start, end time.Time) string {
 	since = strings.TrimSpace(since)
 	until = strings.TrimSpace(until)
@@ -132,7 +144,9 @@ func topRangeLabel(since, until string, months int, start, end time.Time) string
 	return fmt.Sprintf("%s to %s", start.Format("2006-01-02"), end.Format("2006-01-02"))
 }
 
+// writeTopTable 以表格格式输出排行榜。
 func writeTopTable(out io.Writer, ranking stats.RepoRanking, rangeLabel string) error {
+	// 将绝对路径转换为 ~/... 的短路径，并计算仓库列宽度
 	displayPaths := make([]string, 0, len(ranking.Repositories))
 	repoWidth := len("Repository")
 	for _, r := range ranking.Repositories {
@@ -143,6 +157,7 @@ func writeTopTable(out io.Writer, ranking stats.RepoRanking, rangeLabel string) 
 		}
 	}
 
+	// 计算各列宽度，确保表头和数据对齐
 	rankWidth := len(fmt.Sprintf("%d", len(ranking.Repositories)))
 	rankWidth = max(rankWidth, 2)
 
@@ -160,6 +175,7 @@ func writeTopTable(out io.Writer, ranking stats.RepoRanking, rangeLabel string) 
 
 	percentWidth := len("100.0%")
 
+	// 绘制表格：标题 → 分隔线 → 表头 → 分隔线 → 数据行 → 分隔线 → 汇总行
 	lineLen := rankWidth + 3 + repoWidth + 1 + commitWidth + 1 + percentWidth
 	rule := strings.Repeat("─", lineLen)
 
@@ -179,12 +195,14 @@ func writeTopTable(out io.Writer, ranking stats.RepoRanking, rangeLabel string) 
 	return nil
 }
 
+// writeTopJSON 以 JSON 格式输出排行榜。
 func writeTopJSON(out io.Writer, ranking stats.RepoRanking) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(ranking)
 }
 
+// writeTopCSV 以 CSV 格式输出排行榜。
 func writeTopCSV(out io.Writer, ranking stats.RepoRanking) error {
 	w := csv.NewWriter(out)
 	if err := w.Write([]string{"repository", "commits", "percent"}); err != nil {
@@ -203,6 +221,7 @@ func writeTopCSV(out io.Writer, ranking stats.RepoRanking) error {
 	return w.Error()
 }
 
+// displayRepoPath 将绝对路径转换为更友好的显示格式（~ 替代 home 目录）。
 func displayRepoPath(p string) string {
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {

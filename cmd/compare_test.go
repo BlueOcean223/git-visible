@@ -61,7 +61,7 @@ func TestCompare_TwoEmails_TableColumns(t *testing.T) {
 	totalLine := findLineWithPrefix(s, "Total commits")
 	require.NotEmpty(t, totalLine)
 
-	re := regexp.MustCompile("^Total commits\\s+(\\d+)\\s+(\\d+)\\s*$")
+	re := regexp.MustCompile(`^Total commits\s+(\d+)\s+(\d+)\s*$`)
 	m := re.FindStringSubmatch(totalLine)
 	require.Len(t, m, 3, "line=%q", totalLine)
 	assert.Equal(t, "3", m[1])
@@ -70,7 +70,7 @@ func TestCompare_TwoEmails_TableColumns(t *testing.T) {
 	activeLine := findLineWithPrefix(s, "Active days")
 	require.NotEmpty(t, activeLine)
 
-	re = regexp.MustCompile("^Active days\\s+(\\d+)\\s+(\\d+)\\s*$")
+	re = regexp.MustCompile(`^Active days\s+(\d+)\s+(\d+)\s*$`)
 	m = re.FindStringSubmatch(activeLine)
 	require.Len(t, m, 3, "line=%q", activeLine)
 	assert.Equal(t, "2", m[1])

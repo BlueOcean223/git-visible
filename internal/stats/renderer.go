@@ -75,6 +75,7 @@ func RenderHeatmapRangeNoLegendNoSummary(stats map[time.Time]int, start, end tim
 	return renderHeatmapRange(stats, start, end, false, false)
 }
 
+// renderHeatmapRange 是热力图渲染的核心实现。
 func renderHeatmapRange(stats map[time.Time]int, start, end time.Time, includeLegend bool, includeSummary bool) string {
 	if start.IsZero() || end.IsZero() || start.After(end) {
 		return ""

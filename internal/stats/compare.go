@@ -155,6 +155,7 @@ func ParsePeriod(s string) (Period, error) {
 	return Period{}, fmt.Errorf("invalid period %q (expected YYYY, YYYY-HN, YYYY-QN, or YYYY-MM)", s)
 }
 
+// isDigits 检查字符串是否只包含数字字符。
 func isDigits(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {
