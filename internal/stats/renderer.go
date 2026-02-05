@@ -123,10 +123,12 @@ func renderHeatmapRange(stats map[time.Time]int, start, end time.Time, includeLe
 	}
 
 	if includeLegend {
+		b.WriteByte('\n')
 		b.WriteString(RenderLegend())
 	}
 
 	if includeSummary {
+		b.WriteByte('\n')
 		b.WriteString(RenderSummary(CalculateSummary(stats)))
 	}
 

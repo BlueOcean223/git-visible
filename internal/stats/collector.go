@@ -109,6 +109,86 @@ func CollectStats(repos []string, emails []string, start, end time.Time) (map[ti
 	return out, errors.Join(errs...)
 }
 
+// CollectStatsPerRepo 并发收集多个仓库的提交统计，并按仓库分别返回结果。
+// 返回 map[repoPath]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
+// 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
+func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time) (map[string]map[time.Time]int, error) {
+	if start.IsZero() {
+		return nil, fmt.Errorf("start must be set")
+	}
+	if end.IsZero() {
+		return nil, fmt.Errorf("end must be set")
+	}
+
+	loc := end.Location()
+	start = beginningOfDay(start, loc)
+	end = beginningOfDay(end, loc)
+
+	if start.After(end) {
+		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+
+	// 构建邮箱过滤集合
+	emailSet := make(map[string]struct{}, len(emails))
+	for _, email := range emails {
+		if email == "" {
+			continue
+		}
+		emailSet[email] = struct{}{}
+	}
+
+	out := make(map[string]map[time.Time]int)
+
+	// 并发控制和结果聚合
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		emu  sync.Mutex
+		pmu  sync.Mutex
+		errs []error
+	)
+
+	bar := newRepoProgressBar(len(repos))
+	if bar != nil {
+		defer func() { _ = bar.Finish() }()
+	}
+
+	sem := make(chan struct{}, maxConcurrency)
+
+	for _, repoPath := range repos {
+		wg.Add(1)
+		go func(repoPath string) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			defer wg.Done()
+			defer func() {
+				if bar == nil {
+					return
+				}
+				pmu.Lock()
+				_ = bar.Add(1)
+				pmu.Unlock()
+			}()
+
+			stats, err := collectRepo(repoPath, start, end, loc, emailSet)
+			if err != nil {
+				emu.Lock()
+				errs = append(errs, err)
+				emu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			out[repoPath] = stats
+			mu.Unlock()
+		}(repoPath)
+	}
+
+	wg.Wait()
+
+	return out, errors.Join(errs...)
+}
+
 // CollectStatsMonths 兼容旧接口：按最近 N 个月（对齐到周日）并截止到今天统计。
 func CollectStatsMonths(repos []string, emails []string, months int) (map[time.Time]int, error) {
 	start, end, err := TimeRange("", "", months)

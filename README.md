@@ -29,6 +29,7 @@ go run .
 `git-visible` 默认等同于 `git-visible show`。
 
 - `git-visible show`：显示贡献热力图
+- `git-visible top`：显示贡献最多的仓库排行榜
 - `git-visible add <folder>`：扫描并添加目录下的 Git 仓库
 - `git-visible list`：列出已添加的仓库
 - `git-visible remove <path>`：移除指定仓库
@@ -70,6 +71,14 @@ git-visible show --format json
 git-visible show --format csv
 ```
 
+查看贡献最多的仓库：
+
+```bash
+git-visible top
+git-visible top -n 5
+git-visible top --all -f json
+```
+
 查看/设置默认配置：
 
 ```bash
@@ -84,6 +93,20 @@ git-visible set months 12
 
 - `--email`, `-e`：邮箱过滤（可重复指定）
 - `--months`, `-m`：统计月数（不传时使用配置值）
+- `--since`：起始日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
+- `--until`：结束日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
+- `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+- `--no-legend`：隐藏图例（仅 `table`）
+- `--no-summary`：隐藏摘要信息（仅 `table`）
+
+### top
+
+- `--number`, `-n`：显示数量（默认 10）
+- `--all`：显示全部仓库
+- `--email`, `-e`：邮箱过滤（可重复指定）
+- `--months`, `-m`：统计月数（不传时使用配置值）
+- `--since`：起始日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
+- `--until`：结束日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
 
 ### add

@@ -3,6 +3,8 @@ package stats
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func setFixedNow(t *testing.T, now time.Time) {
@@ -16,30 +18,16 @@ func TestCalculateSummary_Empty(t *testing.T) {
 	setFixedNow(t, time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 
 	got := CalculateSummary(map[time.Time]int{})
-	if got.TotalCommits != 0 {
-		t.Fatalf("TotalCommits = %d, want 0", got.TotalCommits)
-	}
-	if got.ActiveDays != 0 {
-		t.Fatalf("ActiveDays = %d, want 0", got.ActiveDays)
-	}
-	if got.CurrentStreak != 0 {
-		t.Fatalf("CurrentStreak = %d, want 0", got.CurrentStreak)
-	}
-	if got.LongestStreak.Days != 0 {
-		t.Fatalf("LongestStreak.Days = %d, want 0", got.LongestStreak.Days)
-	}
-	if !got.LongestStreak.Start.IsZero() || !got.LongestStreak.End.IsZero() {
-		t.Fatalf("LongestStreak range = (%v-%v), want zero values", got.LongestStreak.Start, got.LongestStreak.End)
-	}
-	if got.MostActiveWeekday.Commits != 0 {
-		t.Fatalf("MostActiveWeekday.Commits = %d, want 0", got.MostActiveWeekday.Commits)
-	}
-	if got.PeakDay.Commits != 0 {
-		t.Fatalf("PeakDay.Commits = %d, want 0", got.PeakDay.Commits)
-	}
-	if !got.PeakDay.Date.IsZero() {
-		t.Fatalf("PeakDay.Date = %v, want zero value", got.PeakDay.Date)
-	}
+
+	assert.Equal(t, 0, got.TotalCommits)
+	assert.Equal(t, 0, got.ActiveDays)
+	assert.Equal(t, 0, got.CurrentStreak)
+	assert.Equal(t, 0, got.LongestStreak.Days)
+	assert.True(t, got.LongestStreak.Start.IsZero())
+	assert.True(t, got.LongestStreak.End.IsZero())
+	assert.Equal(t, 0, got.MostActiveWeekday.Commits)
+	assert.Equal(t, 0, got.PeakDay.Commits)
+	assert.True(t, got.PeakDay.Date.IsZero())
 }
 
 func TestCalculateSummary_SingleDay(t *testing.T) {
@@ -51,27 +39,16 @@ func TestCalculateSummary_SingleDay(t *testing.T) {
 	st := map[time.Time]int{today: 3}
 	got := CalculateSummary(st)
 
-	if got.TotalCommits != 3 {
-		t.Fatalf("TotalCommits = %d, want 3", got.TotalCommits)
-	}
-	if got.ActiveDays != 1 {
-		t.Fatalf("ActiveDays = %d, want 1", got.ActiveDays)
-	}
-	if got.CurrentStreak != 1 {
-		t.Fatalf("CurrentStreak = %d, want 1", got.CurrentStreak)
-	}
-	if got.LongestStreak.Days != 1 {
-		t.Fatalf("LongestStreak.Days = %d, want 1", got.LongestStreak.Days)
-	}
-	if !got.LongestStreak.Start.Equal(today) || !got.LongestStreak.End.Equal(today) {
-		t.Fatalf("LongestStreak range = (%v-%v), want (%v-%v)", got.LongestStreak.Start, got.LongestStreak.End, today, today)
-	}
-	if got.MostActiveWeekday.Weekday != time.Wednesday || got.MostActiveWeekday.Commits != 3 {
-		t.Fatalf("MostActiveWeekday = (%v,%d), want (Wednesday,3)", got.MostActiveWeekday.Weekday, got.MostActiveWeekday.Commits)
-	}
-	if !got.PeakDay.Date.Equal(today) || got.PeakDay.Commits != 3 {
-		t.Fatalf("PeakDay = (%v,%d), want (%v,3)", got.PeakDay.Date, got.PeakDay.Commits, today)
-	}
+	assert.Equal(t, 3, got.TotalCommits)
+	assert.Equal(t, 1, got.ActiveDays)
+	assert.Equal(t, 1, got.CurrentStreak)
+	assert.Equal(t, 1, got.LongestStreak.Days)
+	assert.True(t, got.LongestStreak.Start.Equal(today))
+	assert.True(t, got.LongestStreak.End.Equal(today))
+	assert.Equal(t, time.Wednesday, got.MostActiveWeekday.Weekday)
+	assert.Equal(t, 3, got.MostActiveWeekday.Commits)
+	assert.True(t, got.PeakDay.Date.Equal(today))
+	assert.Equal(t, 3, got.PeakDay.Commits)
 }
 
 func TestCalculateSummary_Consecutive7Days(t *testing.T) {
@@ -84,34 +61,25 @@ func TestCalculateSummary_Consecutive7Days(t *testing.T) {
 		day := beginningOfDay(now.AddDate(0, 0, -i), loc)
 		st[day] = 1
 	}
-	// Make one weekday clearly the most active & peak day.
-	wed := beginningOfDay(time.Date(2024, 6, 5, 12, 0, 0, 0, loc), loc) // Wed in range
+	wed := beginningOfDay(time.Date(2024, 6, 5, 12, 0, 0, 0, loc), loc)
 	st[wed] = 5
 
 	got := CalculateSummary(st)
-	if got.TotalCommits != 11 {
-		t.Fatalf("TotalCommits = %d, want 11", got.TotalCommits)
-	}
-	if got.ActiveDays != 7 {
-		t.Fatalf("ActiveDays = %d, want 7", got.ActiveDays)
-	}
-	if got.CurrentStreak != 7 {
-		t.Fatalf("CurrentStreak = %d, want 7", got.CurrentStreak)
-	}
-	if got.LongestStreak.Days != 7 {
-		t.Fatalf("LongestStreak.Days = %d, want 7", got.LongestStreak.Days)
-	}
+
+	assert.Equal(t, 11, got.TotalCommits)
+	assert.Equal(t, 7, got.ActiveDays)
+	assert.Equal(t, 7, got.CurrentStreak)
+	assert.Equal(t, 7, got.LongestStreak.Days)
+
 	start := beginningOfDay(now.AddDate(0, 0, -6), loc)
 	end := beginningOfDay(now, loc)
-	if !got.LongestStreak.Start.Equal(start) || !got.LongestStreak.End.Equal(end) {
-		t.Fatalf("LongestStreak range = (%v-%v), want (%v-%v)", got.LongestStreak.Start, got.LongestStreak.End, start, end)
-	}
-	if got.MostActiveWeekday.Weekday != time.Wednesday || got.MostActiveWeekday.Commits != 5 {
-		t.Fatalf("MostActiveWeekday = (%v,%d), want (Wednesday,5)", got.MostActiveWeekday.Weekday, got.MostActiveWeekday.Commits)
-	}
-	if !got.PeakDay.Date.Equal(wed) || got.PeakDay.Commits != 5 {
-		t.Fatalf("PeakDay = (%v,%d), want (%v,5)", got.PeakDay.Date, got.PeakDay.Commits, wed)
-	}
+	assert.True(t, got.LongestStreak.Start.Equal(start))
+	assert.True(t, got.LongestStreak.End.Equal(end))
+
+	assert.Equal(t, time.Wednesday, got.MostActiveWeekday.Weekday)
+	assert.Equal(t, 5, got.MostActiveWeekday.Commits)
+	assert.True(t, got.PeakDay.Date.Equal(wed))
+	assert.Equal(t, 5, got.PeakDay.Commits)
 }
 
 func TestCalculateSummary_WithGap(t *testing.T) {
@@ -134,21 +102,13 @@ func TestCalculateSummary_WithGap(t *testing.T) {
 	}
 
 	got := CalculateSummary(st)
-	if got.TotalCommits != 8 {
-		t.Fatalf("TotalCommits = %d, want 8", got.TotalCommits)
-	}
-	if got.ActiveDays != 5 {
-		t.Fatalf("ActiveDays = %d, want 5", got.ActiveDays)
-	}
-	if got.CurrentStreak != 2 {
-		t.Fatalf("CurrentStreak = %d, want 2", got.CurrentStreak)
-	}
-	if got.LongestStreak.Days != 3 {
-		t.Fatalf("LongestStreak.Days = %d, want 3", got.LongestStreak.Days)
-	}
-	if !got.LongestStreak.Start.Equal(wed) || !got.LongestStreak.End.Equal(fri) {
-		t.Fatalf("LongestStreak range = (%v-%v), want (%v-%v)", got.LongestStreak.Start, got.LongestStreak.End, wed, fri)
-	}
+
+	assert.Equal(t, 8, got.TotalCommits)
+	assert.Equal(t, 5, got.ActiveDays)
+	assert.Equal(t, 2, got.CurrentStreak)
+	assert.Equal(t, 3, got.LongestStreak.Days)
+	assert.True(t, got.LongestStreak.Start.Equal(wed))
+	assert.True(t, got.LongestStreak.End.Equal(fri))
 }
 
 func TestCalculateSummary_TodayNoCommits_CurrentStreakZero(t *testing.T) {
@@ -165,15 +125,11 @@ func TestCalculateSummary_TodayNoCommits_CurrentStreakZero(t *testing.T) {
 	}
 
 	got := CalculateSummary(st)
-	if got.CurrentStreak != 0 {
-		t.Fatalf("CurrentStreak = %d, want 0", got.CurrentStreak)
-	}
-	if got.LongestStreak.Days != 2 {
-		t.Fatalf("LongestStreak.Days = %d, want 2", got.LongestStreak.Days)
-	}
-	if !got.LongestStreak.Start.Equal(twoDaysAgo) || !got.LongestStreak.End.Equal(yesterday) {
-		t.Fatalf("LongestStreak range = (%v-%v), want (%v-%v)", got.LongestStreak.Start, got.LongestStreak.End, twoDaysAgo, yesterday)
-	}
+
+	assert.Equal(t, 0, got.CurrentStreak)
+	assert.Equal(t, 2, got.LongestStreak.Days)
+	assert.True(t, got.LongestStreak.Start.Equal(twoDaysAgo))
+	assert.True(t, got.LongestStreak.End.Equal(yesterday))
 }
 
 func TestRenderSummary_Format(t *testing.T) {
@@ -195,7 +151,5 @@ func TestRenderSummary_Format(t *testing.T) {
 		"Longest streak: 14 days (Dec 01 - Dec 14)\n" +
 		"Most active: Wed (67 commits) │ Peak day: Dec 12 (18 commits)\n"
 
-	if got := RenderSummary(s); got != want {
-		t.Fatalf("RenderSummary() =\n%q\nwant:\n%q", got, want)
-	}
+	assert.Equal(t, want, RenderSummary(s))
 }

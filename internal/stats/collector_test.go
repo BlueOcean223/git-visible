@@ -3,6 +3,9 @@ package stats
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBeginningOfDay(t *testing.T) {
@@ -33,29 +36,22 @@ func TestBeginningOfDay(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := beginningOfDay(tt.input, loc)
-			if !got.Equal(tt.want) {
-				t.Errorf("beginningOfDay() = %v, want %v", got, tt.want)
-			}
+			assert.True(t, got.Equal(tt.want), "beginningOfDay() = %v, want %v", got, tt.want)
 		})
 	}
 }
 
 func TestBeginningOfDay_DifferentTimezones(t *testing.T) {
-	// UTC 时间
 	utc := time.UTC
 	inputUTC := time.Date(2024, 6, 15, 10, 30, 0, 0, utc)
 
-	// 转换到 Local 时区后取当天开始
 	loc := time.Local
 	got := beginningOfDay(inputUTC, loc)
 
-	// 结果应该是 Local 时区的当天 00:00:00
-	if got.Location() != loc {
-		t.Errorf("beginningOfDay() location = %v, want %v", got.Location(), loc)
-	}
-	if got.Hour() != 0 || got.Minute() != 0 || got.Second() != 0 {
-		t.Errorf("beginningOfDay() time = %v, want 00:00:00", got)
-	}
+	assert.Equal(t, loc, got.Location(), "should be in local timezone")
+	assert.Equal(t, 0, got.Hour(), "hour should be 0")
+	assert.Equal(t, 0, got.Minute(), "minute should be 0")
+	assert.Equal(t, 0, got.Second(), "second should be 0")
 }
 
 func TestHeatmapStart(t *testing.T) {
@@ -87,62 +83,38 @@ func TestHeatmapStart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := heatmapStart(tt.now, tt.months)
 
-			// 应该是周日
-			if got.Weekday() != time.Sunday {
-				t.Errorf("heatmapStart() weekday = %v, want Sunday", got.Weekday())
-			}
+			assert.Equal(t, time.Sunday, got.Weekday(), "should start on Sunday")
+			assert.Equal(t, 0, got.Hour(), "hour should be 0")
+			assert.Equal(t, 0, got.Minute(), "minute should be 0")
+			assert.Equal(t, 0, got.Second(), "second should be 0")
 
-			// 应该是当天开始（00:00:00）
-			if got.Hour() != 0 || got.Minute() != 0 || got.Second() != 0 {
-				t.Errorf("heatmapStart() time = %v, want 00:00:00", got)
-			}
-
-			// 应该在指定月份之前
-			expectedEarliest := tt.now.AddDate(0, -tt.months, -7) // 最多再往前 7 天找周日
-			if got.Before(expectedEarliest) {
-				t.Errorf("heatmapStart() = %v, too early (expected after %v)", got, expectedEarliest)
-			}
+			expectedEarliest := tt.now.AddDate(0, -tt.months, -7)
+			assert.False(t, got.Before(expectedEarliest), "should not be before expected earliest")
 		})
 	}
 }
 
 func TestCollectStats_InvalidMonths(t *testing.T) {
 	_, err := CollectStatsMonths(nil, nil, 0)
-	if err == nil {
-		t.Error("CollectStats(months=0) should return error")
-	}
+	assert.Error(t, err, "months=0 should return error")
 
 	_, err = CollectStatsMonths(nil, nil, -1)
-	if err == nil {
-		t.Error("CollectStats(months=-1) should return error")
-	}
+	assert.Error(t, err, "months=-1 should return error")
 }
 
 func TestCollectStats_EmptyRepos(t *testing.T) {
 	stats, err := CollectStatsMonths([]string{}, nil, 6)
-	if err != nil {
-		t.Fatalf("CollectStats() error = %v", err)
-	}
-	if len(stats) != 0 {
-		t.Errorf("CollectStats() = %v, want empty map", stats)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, stats)
 }
 
 func TestCollectStats_NonExistentRepo(t *testing.T) {
 	stats, err := CollectStatsMonths([]string{"/non/existent/repo"}, nil, 6)
 
-	// 应该返回空结果和错误
-	if err == nil {
-		t.Error("CollectStats() with non-existent repo should return error")
-	}
-	if len(stats) != 0 {
-		t.Errorf("CollectStats() = %v, want empty map", stats)
-	}
+	assert.Error(t, err, "non-existent repo should return error")
+	assert.Empty(t, stats)
 }
 
 func TestMaxConcurrency(t *testing.T) {
-	// 验证 maxConcurrency 已设置为合理值
-	if maxConcurrency < 1 {
-		t.Errorf("maxConcurrency = %d, want >= 1", maxConcurrency)
-	}
+	assert.GreaterOrEqual(t, maxConcurrency, 1, "maxConcurrency should be >= 1")
 }
