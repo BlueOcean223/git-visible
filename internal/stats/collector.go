@@ -22,21 +22,26 @@ var maxConcurrency = runtime.NumCPU()
 // 参数:
 //   - repos: 要统计的仓库路径列表
 //   - emails: 邮箱过滤列表，为空时统计所有提交
-//   - months: 统计的月份数
+//   - start: 起始日期（包含），按天统计的边界，建议传入当天 00:00:00
+//   - end: 结束日期（包含），按天统计的边界，建议传入当天 00:00:00
 //
 // 返回以日期（当天 00:00:00）为键、提交数为值的映射。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
-func CollectStats(repos []string, emails []string, months int) (map[time.Time]int, error) {
-	if months <= 0 {
-		return nil, fmt.Errorf("months must be > 0, got %d", months)
+func CollectStats(repos []string, emails []string, start, end time.Time) (map[time.Time]int, error) {
+	if start.IsZero() {
+		return nil, fmt.Errorf("start must be set")
+	}
+	if end.IsZero() {
+		return nil, fmt.Errorf("end must be set")
 	}
 
-	now := time.Now()
-	loc := now.Location()
+	loc := end.Location()
+	start = beginningOfDay(start, loc)
+	end = beginningOfDay(end, loc)
 
-	// 计算统计的时间范围
-	start := heatmapStart(now, months)
-	end := beginningOfDay(now, loc)
+	if start.After(end) {
+		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
 
 	// 构建邮箱过滤集合
 	emailSet := make(map[string]struct{}, len(emails))
@@ -102,6 +107,15 @@ func CollectStats(repos []string, emails []string, months int) (map[time.Time]in
 	wg.Wait()
 
 	return out, errors.Join(errs...)
+}
+
+// CollectStatsMonths 兼容旧接口：按最近 N 个月（对齐到周日）并截止到今天统计。
+func CollectStatsMonths(repos []string, emails []string, months int) (map[time.Time]int, error) {
+	start, end, err := TimeRange("", "", months)
+	if err != nil {
+		return nil, err
+	}
+	return CollectStats(repos, emails, start, end)
 }
 
 // newRepoProgressBar 创建仓库处理进度条。

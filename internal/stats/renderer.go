@@ -21,39 +21,80 @@ const (
 // 热力图以周为列、星期几为行，使用不同颜色表示提交数量级别。
 // 返回包含 ANSI 颜色代码的字符串，可直接输出到终端。
 func RenderHeatmap(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, true, true)
+	start, end, err := TimeRange("", "", months)
+	if err != nil {
+		return ""
+	}
+	return renderHeatmapRange(stats, start, end, true, true)
 }
 
 // RenderHeatmapNoLegend 渲染热力图但不包含图例。
 func RenderHeatmapNoLegend(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, false, true)
+	start, end, err := TimeRange("", "", months)
+	if err != nil {
+		return ""
+	}
+	return renderHeatmapRange(stats, start, end, false, true)
 }
 
 // RenderHeatmapNoSummary 渲染热力图但不包含摘要信息。
 func RenderHeatmapNoSummary(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, true, false)
+	start, end, err := TimeRange("", "", months)
+	if err != nil {
+		return ""
+	}
+	return renderHeatmapRange(stats, start, end, true, false)
 }
 
 // RenderHeatmapNoLegendNoSummary 渲染热力图但不包含图例和摘要信息。
 func RenderHeatmapNoLegendNoSummary(stats map[time.Time]int, months int) string {
-	return renderHeatmap(stats, months, false, false)
+	start, end, err := TimeRange("", "", months)
+	if err != nil {
+		return ""
+	}
+	return renderHeatmapRange(stats, start, end, false, false)
 }
 
-func renderHeatmap(stats map[time.Time]int, months int, includeLegend bool, includeSummary bool) string {
-	if months <= 0 {
+// RenderHeatmapRange 将统计数据渲染为指定时间范围内的贡献热力图。
+func RenderHeatmapRange(stats map[time.Time]int, start, end time.Time) string {
+	return renderHeatmapRange(stats, start, end, true, true)
+}
+
+// RenderHeatmapRangeNoLegend 渲染指定时间范围内的热力图，但不包含图例。
+func RenderHeatmapRangeNoLegend(stats map[time.Time]int, start, end time.Time) string {
+	return renderHeatmapRange(stats, start, end, false, true)
+}
+
+// RenderHeatmapRangeNoSummary 渲染指定时间范围内的热力图，但不包含摘要信息。
+func RenderHeatmapRangeNoSummary(stats map[time.Time]int, start, end time.Time) string {
+	return renderHeatmapRange(stats, start, end, true, false)
+}
+
+// RenderHeatmapRangeNoLegendNoSummary 渲染指定时间范围内的热力图，但不包含图例和摘要信息。
+func RenderHeatmapRangeNoLegendNoSummary(stats map[time.Time]int, start, end time.Time) string {
+	return renderHeatmapRange(stats, start, end, false, false)
+}
+
+func renderHeatmapRange(stats map[time.Time]int, start, end time.Time, includeLegend bool, includeSummary bool) string {
+	if start.IsZero() || end.IsZero() || start.After(end) {
 		return ""
 	}
 
-	now := time.Now()
-	loc := now.Location()
+	loc := end.Location()
+	start = beginningOfDay(start, loc)
+	end = beginningOfDay(end, loc)
 
-	// 计算时间范围
-	start := heatmapStart(now, months)
-	end := beginningOfDay(now, loc)
+	today := beginningOfDay(timeNow(), loc)
+
+	// 热力图从周日开始对齐列。
+	weekStart := start
+	for weekStart.Weekday() != time.Sunday {
+		weekStart = weekStart.AddDate(0, 0, -1)
+	}
 
 	// 构建每周的起始日期列表（用作列）
 	weekStarts := make([]time.Time, 0, 32)
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 7) {
+	for d := weekStart; !d.After(end); d = d.AddDate(0, 0, 7) {
 		weekStarts = append(weekStarts, d)
 	}
 
@@ -75,7 +116,7 @@ func renderHeatmap(stats map[time.Time]int, months int, includeLegend bool, incl
 
 			key := beginningOfDay(day, loc)
 			count := stats[key]
-			isToday := key.Equal(end)
+			isToday := key.Equal(today)
 			b.WriteString(renderCell(count, isToday))
 		}
 		b.WriteByte('\n')

@@ -20,6 +20,8 @@ import (
 var (
 	showEmails    []string // 要过滤的邮箱列表
 	showMonths    int      // 统计的月份数
+	showSince     string   // 起始日期：YYYY-MM-DD / YYYY-MM / 2m/1w/1y
+	showUntil     string   // 结束日期：YYYY-MM-DD / YYYY-MM / 2m/1w/1y
 	showFormat    string   // 输出格式：table/json/csv
 	showNoLegend  bool     // 是否隐藏图例（仅 table 输出）
 	showLegend    bool     // 是否显示图例（仅 table 输出）
@@ -49,7 +51,9 @@ func init() {
 // 这样根命令和 show 子命令可以共享相同的标志。
 func addShowFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArrayVarP(&showEmails, "email", "e", nil, "Email filter (repeatable)")
-	cmd.Flags().IntVarP(&showMonths, "months", "m", 0, "Months to include (default: config value)")
+	cmd.Flags().IntVarP(&showMonths, "months", "m", 0, "Months to include (default: config value; ignored when --since/--until is set)")
+	cmd.Flags().StringVar(&showSince, "since", "", "Start date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
+	cmd.Flags().StringVar(&showUntil, "until", "", "End date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	cmd.Flags().StringVarP(&showFormat, "format", "f", "table", "Output format: table/json/csv")
 	cmd.Flags().BoolVar(&showNoLegend, "no-legend", false, "Hide legend in table output")
 	cmd.Flags().BoolVar(&showNoSummary, "no-summary", false, "Hide summary")
@@ -76,13 +80,23 @@ func runShow(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// 确定统计月份数：优先使用命令行参数，否则使用配置值
+	since := strings.TrimSpace(showSince)
+	until := strings.TrimSpace(showUntil)
+
+	// 确定统计月份数：优先使用命令行参数，否则使用配置值。
+	// 当指定 --since/--until 时忽略 -m/--months（仅在只指定 --until 时使用配置默认 months 计算起点）。
 	months := showMonths
 	if months == 0 {
 		months = cfg.Months
 	}
-	if months <= 0 {
-		return fmt.Errorf("months must be > 0, got %d", months)
+	rangeMonths := months
+	if since != "" || until != "" {
+		rangeMonths = cfg.Months
+	}
+
+	start, end, err := stats.TimeRange(since, until, rangeMonths)
+	if err != nil {
+		return err
 	}
 
 	// 确定邮箱过滤条件：优先使用命令行参数，否则使用配置值
@@ -92,7 +106,7 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	}
 
 	// 收集所有仓库的提交统计
-	st, collectErr := stats.CollectStats(repos, emails, months)
+	st, collectErr := stats.CollectStats(repos, emails, start, end)
 	if collectErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}
@@ -105,13 +119,13 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	case "", "table":
 		switch {
 		case showLegend && showSummary:
-			fmt.Fprint(out, stats.RenderHeatmap(st, months))
+			fmt.Fprint(out, stats.RenderHeatmapRange(st, start, end))
 		case showLegend && !showSummary:
-			fmt.Fprint(out, stats.RenderHeatmapNoSummary(st, months))
+			fmt.Fprint(out, stats.RenderHeatmapRangeNoSummary(st, start, end))
 		case !showLegend && showSummary:
-			fmt.Fprint(out, stats.RenderHeatmapNoLegend(st, months))
+			fmt.Fprint(out, stats.RenderHeatmapRangeNoLegend(st, start, end))
 		default:
-			fmt.Fprint(out, stats.RenderHeatmapNoLegendNoSummary(st, months))
+			fmt.Fprint(out, stats.RenderHeatmapRangeNoLegendNoSummary(st, start, end))
 		}
 		return nil
 	case "json":

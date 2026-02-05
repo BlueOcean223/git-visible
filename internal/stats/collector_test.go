@@ -107,19 +107,19 @@ func TestHeatmapStart(t *testing.T) {
 }
 
 func TestCollectStats_InvalidMonths(t *testing.T) {
-	_, err := CollectStats(nil, nil, 0)
+	_, err := CollectStatsMonths(nil, nil, 0)
 	if err == nil {
 		t.Error("CollectStats(months=0) should return error")
 	}
 
-	_, err = CollectStats(nil, nil, -1)
+	_, err = CollectStatsMonths(nil, nil, -1)
 	if err == nil {
 		t.Error("CollectStats(months=-1) should return error")
 	}
 }
 
 func TestCollectStats_EmptyRepos(t *testing.T) {
-	stats, err := CollectStats([]string{}, nil, 6)
+	stats, err := CollectStatsMonths([]string{}, nil, 6)
 	if err != nil {
 		t.Fatalf("CollectStats() error = %v", err)
 	}
@@ -129,7 +129,7 @@ func TestCollectStats_EmptyRepos(t *testing.T) {
 }
 
 func TestCollectStats_NonExistentRepo(t *testing.T) {
-	stats, err := CollectStats([]string{"/non/existent/repo"}, nil, 6)
+	stats, err := CollectStatsMonths([]string{"/non/existent/repo"}, nil, 6)
 
 	// 应该返回空结果和错误
 	if err == nil {
