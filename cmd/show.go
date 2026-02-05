@@ -21,6 +21,8 @@ var (
 	showEmails []string // 要过滤的邮箱列表
 	showMonths int      // 统计的月份数
 	showFormat string   // 输出格式：table/json/csv
+	showNoLegend bool   // 是否隐藏图例（仅 table 输出）
+	showLegend   bool   // 是否显示图例（仅 table 输出）
 )
 
 // showCmd 实现 show 子命令，用于显示贡献热力图。
@@ -47,6 +49,7 @@ func addShowFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArrayVarP(&showEmails, "email", "e", nil, "Email filter (repeatable)")
 	cmd.Flags().IntVarP(&showMonths, "months", "m", 0, "Months to include (default: config value)")
 	cmd.Flags().StringVarP(&showFormat, "format", "f", "table", "Output format: table/json/csv")
+	cmd.Flags().BoolVar(&showNoLegend, "no-legend", false, "Hide legend in table output")
 }
 
 // runShow 是 show 命令的核心逻辑。
@@ -91,10 +94,16 @@ func runShow(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}
 
+	showLegend = !showNoLegend
+
 	// 根据指定格式输出结果
 	switch strings.ToLower(strings.TrimSpace(showFormat)) {
 	case "", "table":
-		fmt.Fprint(out, stats.RenderHeatmap(st, months))
+		if showLegend {
+			fmt.Fprint(out, stats.RenderHeatmap(st, months))
+			return nil
+		}
+		fmt.Fprint(out, stats.RenderHeatmapNoLegend(st, months))
 		return nil
 	case "json":
 		return writeJSON(out, st)
