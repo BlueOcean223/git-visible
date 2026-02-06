@@ -55,16 +55,18 @@ cmd.PersistentFlags().StringP("config", "c", "", "desc")  // 继承到子命令
 
 ### Viper 读取配置
 ```go
-viper.SetConfigFile(path)
-viper.SetConfigType("yaml")
-viper.ReadInConfig()
-viper.GetString("key")
-viper.GetInt("key")
+cfg, err := config.Load() // 内部通过 sync.Once 保证单例加载
+if err != nil {
+    return err
+}
+email := cfg.Email
+months := cfg.Months
 ```
+命令层通过 `internal/config.Load()` 读取配置，不直接调用 viper。
 
 ## 并发模式
 
-`stats/collector.go` 使用 goroutine + 信号量并发处理多仓库：
+`stats/collector.go` 的并发逻辑集中在 `collectCommon()`；`CollectStats()` 和 `CollectStatsPerRepo()` 通过 `CollectOptions` 复用同一套并发处理：
 ```go
 var wg sync.WaitGroup
 var mu sync.Mutex  // 保护共享 map
@@ -90,6 +92,7 @@ wg.Wait()
 ## 热力图渲染
 
 `stats/renderer.go` 使用 ANSI 转义码输出彩色方块：
+- 主入口是 `RenderHeatmapWithOptions(stats, HeatmapOptions{...})`，通过 `HeatmapOptions` 控制时间范围/图例/摘要输出
 - 按周列排列（每列 7 天）
 - 根据提交数量映射颜色深浅
 - 输出月份和星期标签

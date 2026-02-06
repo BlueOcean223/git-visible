@@ -18,10 +18,10 @@
 │  │ add.go   │ │ list.go  │ │remove.go │ │ set.go   │   │
 │  │ (扫描)   │ │ (列表)   │ │ (移除)   │ │ (配置)   │   │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘   │
-│  ┌──────────┐                                          │
-│  │version.go│                                          │
-│  │ (版本)   │                                          │
-│  └──────────┘                                          │
+│  ┌──────────┐ ┌──────────┐ ┌─────────────────┐        │
+│  │version.go│ │common.go │ │compare_output.go│        │
+│  │ (版本)   │ │ (公共初始化)│ │ (对比输出格式) │        │
+│  └──────────┘ └──────────┘ └─────────────────┘        │
 └─────────────────────────┬───────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────┐
@@ -46,6 +46,8 @@
 ```
 show 命令
     │
+    ├─► prepareRun() ──► common.go 公共初始化（配置/仓库/时间范围）
+    │
     ▼
 repo.LoadRepos() ──► 读取 ~/.config/git-visible/repos
     │
@@ -54,12 +56,14 @@ stats.CollectStats() ──► 并发遍历仓库，go-git 读取提交
     │                     按邮箱/时间过滤
     │                     返回 map[time.Time]int
     ▼
-stats.RenderHeatmap() ──► 渲染热力图到终端
+stats.RenderHeatmapWithOptions() ──► 渲染热力图到终端
 ```
 
 ### top 命令（仓库排行榜）
 ```
 top 命令
+    │
+    ├─► prepareRun() ──► common.go 公共初始化（配置/仓库/时间范围）
     │
     ▼
 repo.LoadRepos() ──► 读取 ~/.config/git-visible/repos
@@ -77,6 +81,8 @@ stats.RankRepositories() ──► 按提交数排序，计算百分比
 ### compare 命令（对比统计）
 ```
 compare 命令
+    │
+    ├─► prepareRun() ──► common.go 公共初始化（配置/仓库/时间范围）
     │
     ├─► 邮箱对比模式：按邮箱分别收集 stats.CollectStats()
     │                  stats.CalculateCompareMetrics() 计算指标
@@ -97,7 +103,7 @@ add 命令
 repo.ScanRepos() ──► 递归扫描目录，查找 .git
     │                 支持深度限制、排除目录
     ▼
-repo.AddRepo() ──► 写入 ~/.config/git-visible/repos
+repo.AddRepos() ──► 写入 ~/.config/git-visible/repos
 ```
 
 ## 文件存储
