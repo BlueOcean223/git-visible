@@ -30,6 +30,15 @@ type BranchOption struct {
 	AllBranches bool
 }
 
+type CollectOptions struct {
+	Repos     []string
+	Emails    []string
+	Since     time.Time
+	Until     time.Time
+	Branch    string
+	AllBranch bool
+}
+
 // CollectStats 并发收集多个仓库的提交统计。
 // 参数:
 //   - repos: 要统计的仓库路径列表
@@ -40,128 +49,88 @@ type BranchOption struct {
 // 返回以日期（当天 00:00:00）为键、提交数为值的映射。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
 func CollectStats(repos []string, emails []string, start, end time.Time, branch BranchOption) (map[time.Time]int, error) {
-	if start.IsZero() {
-		return nil, fmt.Errorf("start must be set")
-	}
-	if end.IsZero() {
-		return nil, fmt.Errorf("end must be set")
-	}
-
-	branch, err := normalizeBranchOption(branch)
-	if err != nil {
+	loc := end.Location()
+	out := make(map[time.Time]int)
+	done, err := collectCommon(CollectOptions{
+		Repos:     repos,
+		Emails:    emails,
+		Since:     start,
+		Until:     end,
+		Branch:    branch.Branch,
+		AllBranch: branch.AllBranches,
+	}, func(_ string, daily map[string]int) {
+		for day, count := range daily {
+			t, _ := time.ParseInLocation("2006-01-02", day, loc)
+			out[t] += count
+		}
+	})
+	if err != nil && done == nil {
 		return nil, err
 	}
-
-	loc := end.Location()
-	start = beginningOfDay(start, loc)
-	end = beginningOfDay(end, loc)
-
-	if start.After(end) {
-		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
-	}
-
-	// 构建邮箱过滤集合
-	emailSet := make(map[string]struct{}, len(emails))
-	for _, email := range emails {
-		if email == "" {
-			continue
-		}
-		emailSet[email] = struct{}{}
-	}
-
-	out := make(map[time.Time]int)
-
-	// 并发控制和结果聚合
-	var (
-		wg   sync.WaitGroup // 等待所有 goroutine 完成
-		mu   sync.Mutex     // 保护 out 的写入
-		emu  sync.Mutex     // 保护 errs 的写入
-		pmu  sync.Mutex     // 保护进度条更新
-		errs []error        // 收集所有错误
-	)
-
-	bar := newRepoProgressBar(len(repos))
-	if bar != nil {
-		defer func() { _ = bar.Finish() }()
-	}
-
-	// 使用信号量限制并发数
-	sem := make(chan struct{}, maxConcurrency)
-
-	// 并发处理每个仓库
-	for _, repoPath := range repos {
-		wg.Add(1)
-		go func(repoPath string) {
-			sem <- struct{}{}        // 获取信号量
-			defer func() { <-sem }() // 释放信号量
-			defer wg.Done()
-			defer func() {
-				if bar == nil {
-					return
-				}
-				pmu.Lock()
-				_ = bar.Add(1)
-				pmu.Unlock()
-			}()
-
-			stats, err := collectRepo(repoPath, start, end, loc, emailSet, branch)
-			if err != nil {
-				emu.Lock()
-				errs = append(errs, err)
-				emu.Unlock()
-				return
-			}
-
-			// 合并结果
-			mu.Lock()
-			for day, count := range stats {
-				out[day] += count
-			}
-			mu.Unlock()
-		}(repoPath)
-	}
-
-	wg.Wait()
-
-	return out, errors.Join(errs...)
+	return out, err
 }
 
 // CollectStatsPerRepo 并发收集多个仓库的提交统计，并按仓库分别返回结果。
 // 返回 map[repoPath]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
 func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, branch BranchOption) (map[string]map[time.Time]int, error) {
-	if start.IsZero() {
+	loc := end.Location()
+	out := make(map[string]map[time.Time]int)
+	done, err := collectCommon(CollectOptions{
+		Repos:     repos,
+		Emails:    emails,
+		Since:     start,
+		Until:     end,
+		Branch:    branch.Branch,
+		AllBranch: branch.AllBranches,
+	}, func(repoPath string, daily map[string]int) {
+		stats := make(map[time.Time]int, len(daily))
+		for day, count := range daily {
+			t, _ := time.ParseInLocation("2006-01-02", day, loc)
+			stats[t] = count
+		}
+		out[repoPath] = stats
+	})
+	if err != nil && done == nil {
+		return nil, err
+	}
+	return out, err
+}
+
+func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily map[string]int)) ([]string, error) {
+	if opts.Since.IsZero() {
 		return nil, fmt.Errorf("start must be set")
 	}
-	if end.IsZero() {
+	if opts.Until.IsZero() {
 		return nil, fmt.Errorf("end must be set")
 	}
 
-	branch, err := normalizeBranchOption(branch)
+	branch, err := normalizeBranchOption(BranchOption{
+		Branch:      opts.Branch,
+		AllBranches: opts.AllBranch,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	loc := end.Location()
-	start = beginningOfDay(start, loc)
-	end = beginningOfDay(end, loc)
+	loc := opts.Until.Location()
+	start := beginningOfDay(opts.Since, loc)
+	end := beginningOfDay(opts.Until, loc)
 
 	if start.After(end) {
 		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	}
 
-	// 构建邮箱过滤集合
-	emailSet := make(map[string]struct{}, len(emails))
-	for _, email := range emails {
+	emailSet := make(map[string]struct{}, len(opts.Emails))
+	for _, email := range opts.Emails {
 		if email == "" {
 			continue
 		}
 		emailSet[email] = struct{}{}
 	}
 
-	out := make(map[string]map[time.Time]int)
+	done := make([]string, 0, len(opts.Repos))
 
-	// 并发控制和结果聚合
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
@@ -170,14 +139,14 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 		errs []error
 	)
 
-	bar := newRepoProgressBar(len(repos))
+	bar := newRepoProgressBar(len(opts.Repos))
 	if bar != nil {
 		defer func() { _ = bar.Finish() }()
 	}
 
 	sem := make(chan struct{}, maxConcurrency)
 
-	for _, repoPath := range repos {
+	for _, repoPath := range opts.Repos {
 		wg.Add(1)
 		go func(repoPath string) {
 			sem <- struct{}{}
@@ -200,15 +169,20 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 				return
 			}
 
+			daily := make(map[string]int, len(stats))
+			for day, count := range stats {
+				daily[day.Format("2006-01-02")] = count
+			}
+
 			mu.Lock()
-			out[repoPath] = stats
+			aggregator(repoPath, daily)
+			done = append(done, repoPath)
 			mu.Unlock()
 		}(repoPath)
 	}
 
 	wg.Wait()
-
-	return out, errors.Join(errs...)
+	return done, errors.Join(errs...)
 }
 
 // CollectStatsMonths 兼容旧接口：按最近 N 个月（对齐到周日）并截止到今天统计。

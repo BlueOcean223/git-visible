@@ -47,3 +47,4 @@ debug
 dist/
 build/
 bin/
+.ace-tool/
