@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"git-visible/internal/config"
-	"git-visible/internal/repo"
 	"git-visible/internal/stats"
 
 	"github.com/spf13/cobra"
@@ -55,22 +54,14 @@ func init() {
 
 // runTop 是 top 命令的核心逻辑，收集并输出仓库提交排行榜。
 func runTop(cmd *cobra.Command, _ []string) error {
-	// 加载配置获取默认值
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	// 加载已添加的仓库列表
-	repos, err := repo.LoadRepos()
-	if err != nil {
-		return err
-	}
-
 	out := cmd.OutOrStdout()
-	if len(repos) == 0 {
-		fmt.Fprintln(out, "no repositories added")
-		return nil
+	runCtx, err := prepareRun(topEmails, topMonths, topSince, topUntil)
+	if err != nil {
+		if errors.Is(err, errNoRepositoriesAdded) {
+			fmt.Fprintln(out, "no repositories added")
+			return nil
+		}
+		return err
 	}
 
 	if !topAll && topNumber <= 0 {
@@ -80,29 +71,8 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	since := strings.TrimSpace(topSince)
 	until := strings.TrimSpace(topUntil)
 
-	// 确定统计月份数：优先使用命令行参数，否则使用配置值
-	months := topMonths
-	if months == 0 {
-		months = cfg.Months
-	}
-	rangeMonths := months
-	if since != "" || until != "" {
-		rangeMonths = cfg.Months
-	}
-
-	start, end, err := stats.TimeRange(since, until, rangeMonths)
-	if err != nil {
-		return err
-	}
-
-	// 确定邮箱过滤条件：优先使用命令行参数，否则使用配置值
-	emails := topEmails
-	if len(emails) == 0 && strings.TrimSpace(cfg.Email) != "" {
-		emails = []string{strings.TrimSpace(cfg.Email)}
-	}
-
 	// 按仓库分别收集提交统计
-	perRepo, collectErr := stats.CollectStatsPerRepo(repos, emails, start, end, stats.BranchOption{})
+	perRepo, collectErr := stats.CollectStatsPerRepo(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{})
 	if collectErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 	}
@@ -124,7 +94,7 @@ func runTop(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintln(out, "no commits found")
 			return nil
 		}
-		return writeTopTable(out, ranking, topRangeLabel(since, until, months, start, end))
+		return writeTopTable(out, ranking, topRangeLabel(since, until, runCtx.months, runCtx.Since, runCtx.Until))
 	case "json":
 		return writeTopJSON(out, ranking)
 	case "csv":

@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"git-visible/internal/config"
-	"git-visible/internal/repo"
 	"git-visible/internal/stats"
 
 	"github.com/spf13/cobra"
@@ -64,29 +62,28 @@ type periodCompareItem struct {
 
 // runCompare 是 compare 命令的核心逻辑。
 func runCompare(cmd *cobra.Command, _ []string) error {
-	// 加载配置获取默认值
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	// 加载已添加的仓库列表
-	repos, err := repo.LoadRepos()
-	if err != nil {
-		return err
-	}
-
 	out := cmd.OutOrStdout()
-	if len(repos) == 0 {
-		fmt.Fprintln(out, "no repositories added")
-		return nil
-	}
-
 	format := strings.ToLower(strings.TrimSpace(compareFormat))
 
 	// 清理并合并对比参数：--period 和 --year 合并为统一的时间段列表
 	emails := cleanNonEmpty(compareEmails)
 	periodArgs := cleanNonEmpty(append(append([]string{}, comparePeriods...), yearsToPeriods(compareYears)...))
+
+	prepareSince := "1970-01-01"
+	prepareUntil := "1970-01-01"
+	if len(emails) >= 2 {
+		prepareSince = ""
+		prepareUntil = ""
+	}
+
+	runCtx, err := prepareRun(nil, 0, prepareSince, prepareUntil)
+	if err != nil {
+		if errors.Is(err, errNoRepositoriesAdded) {
+			fmt.Fprintln(out, "no repositories added")
+			return nil
+		}
+		return err
+	}
 
 	switch {
 	case len(emails) > 0:
@@ -94,12 +91,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("at least 2 emails are required to compare")
 		}
 
-		start, end, err := stats.TimeRange("", "", cfg.Months)
-		if err != nil {
-			return err
-		}
-
-		items, collectErr := collectCompareByEmail(repos, emails, start, end)
+		items, collectErr := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until)
 		if collectErr != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 		}
@@ -129,12 +121,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			periods = append(periods, period)
 		}
 
-		collectEmails := []string(nil)
-		if strings.TrimSpace(cfg.Email) != "" {
-			collectEmails = []string{strings.TrimSpace(cfg.Email)}
-		}
-
-		items, collectErr := collectCompareByPeriod(repos, periods, collectEmails)
+		items, collectErr := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails)
 		if collectErr != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
 		}
