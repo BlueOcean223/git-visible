@@ -60,23 +60,29 @@ var addCmd = &cobra.Command{
 		}
 
 		// 添加新发现的仓库（跳过已存在的）
-		added := 0
+		toAdd := make([]string, 0, len(found))
 		for _, p := range found {
 			if _, ok := existingSet[p]; ok {
 				continue
 			}
-			if err := repo.AddRepo(p); err != nil {
-				return err
-			}
 			existingSet[p] = struct{}{}
-			added++
-			fmt.Fprintln(out, p)
+			toAdd = append(toAdd, p)
 		}
 
-		if added == 0 {
+		if len(toAdd) == 0 {
 			fmt.Fprintln(out, "no new repositories to add")
 			return nil
 		}
+
+		added, err := repo.AddRepos(toAdd)
+		if err != nil {
+			return err
+		}
+
+		for _, p := range toAdd {
+			fmt.Fprintln(out, p)
+		}
+
 		fmt.Fprintf(out, "added %d repositories\n", added)
 		return nil
 	},

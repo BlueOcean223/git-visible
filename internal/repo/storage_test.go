@@ -119,6 +119,64 @@ func TestAddAndRemoveRepo(t *testing.T) {
 	require.NoError(t, RemoveRepo(repoPath))
 }
 
+func TestAddRepos_Batch(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	repo1 := filepath.Join(tmpDir, "repo-1")
+	repo2 := filepath.Join(tmpDir, "repo-2")
+
+	added, err := AddRepos([]string{repo1, repo2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, added)
+
+	repos, err := LoadRepos()
+	require.NoError(t, err)
+	assert.Equal(t, []string{repo1, repo2}, repos)
+}
+
+func TestAddRepos_DeduplicatesBatchAndExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	existing := filepath.Join(tmpDir, "repo-existing")
+	repo2 := filepath.Join(tmpDir, "repo-2")
+	repo3 := filepath.Join(tmpDir, "repo-3")
+
+	require.NoError(t, AddRepo(existing))
+
+	added, err := AddRepos([]string{
+		existing,     // already exists
+		repo2,        // new
+		repo2 + "/.", // duplicate after normalization
+		" " + repo3,  // trim + new
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, added)
+
+	repos, err := LoadRepos()
+	require.NoError(t, err)
+	assert.Equal(t, []string{existing, repo2, repo3}, repos)
+}
+
+func TestAddRepo_DelegatesToAddRepos(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	repoPath := filepath.Join(tmpDir, "delegated-repo")
+	require.NoError(t, AddRepo(repoPath))
+
+	repos, err := LoadRepos()
+	require.NoError(t, err)
+	assert.Equal(t, []string{repoPath}, repos)
+
+	// Duplicate add should still be ignored.
+	require.NoError(t, AddRepo(repoPath))
+	repos, err = LoadRepos()
+	require.NoError(t, err)
+	assert.Equal(t, []string{repoPath}, repos)
+}
+
 func TestVerifyRepos(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)

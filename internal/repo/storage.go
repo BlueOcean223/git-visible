@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"git-visible/internal/config"
@@ -110,26 +109,50 @@ func saveRepos(repos []string) error {
 	return os.WriteFile(path, []byte(data), 0o600)
 }
 
+// AddRepos 批量添加仓库到列表（如果不存在）。
+// 路径会被标准化后存储，已存在的仓库会被静默忽略。
+// 返回实际新增的仓库数量。
+func AddRepos(paths []string) (added int, err error) {
+	repos, err := LoadRepos()
+	if err != nil {
+		return 0, err
+	}
+
+	existing := make(map[string]struct{}, len(repos))
+	for _, p := range repos {
+		existing[p] = struct{}{}
+	}
+
+	toAdd := make([]string, 0, len(paths))
+	for _, path := range paths {
+		normalized, err := normalizePath(path)
+		if err != nil {
+			return 0, err
+		}
+		if _, ok := existing[normalized]; ok {
+			continue
+		}
+		existing[normalized] = struct{}{}
+		toAdd = append(toAdd, normalized)
+	}
+
+	if len(toAdd) == 0 {
+		return 0, nil
+	}
+
+	repos = append(repos, toAdd...)
+	if err := saveRepos(repos); err != nil {
+		return 0, err
+	}
+
+	return len(toAdd), nil
+}
+
 // AddRepo 添加仓库到列表（如果不存在）。
 // 路径会被标准化后存储，已存在的仓库会被静默忽略。
 func AddRepo(path string) error {
-	normalized, err := normalizePath(path)
-	if err != nil {
-		return err
-	}
-
-	repos, err := LoadRepos()
-	if err != nil {
-		return err
-	}
-
-	// 检查是否已存在
-	if slices.Contains(repos, normalized) {
-		return nil // 已存在，静默返回
-	}
-
-	repos = append(repos, normalized)
-	return saveRepos(repos)
+	_, err := AddRepos([]string{path})
+	return err
 }
 
 // RemoveRepo 从列表中移除指定仓库。
