@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,6 +54,21 @@ func TestCollectStats_AllBranches_DedupByHash(t *testing.T) {
 	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{AllBranches: true})
 	require.NoError(t, err)
 	assert.Equal(t, 4, sumCounts(got), "should de-duplicate commits reachable from multiple branches")
+}
+
+func TestCollectRepo_AllBranches_PruningIdempotent(t *testing.T) {
+	repoPath := t.TempDir()
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithMainAndFeature(t, repoPath, "test@example.com", base)
+
+	loc := time.Local
+	start := time.Date(2025, 6, 1, 0, 0, 0, 0, loc)
+	end := time.Date(2025, 6, 1, 0, 0, 0, 0, loc)
+
+	legacy := collectRepoAllBranchesWithoutPruning(t, repoPath, start, end, loc, map[string]struct{}{})
+	got, err := collectRepo(repoPath, start, end, loc, map[string]struct{}{}, BranchOption{AllBranches: true})
+	require.NoError(t, err)
+	assert.Equal(t, legacy, got, "pruning must not change --all-branches results")
 }
 
 func TestCollectStats_Branch_MissingInOneRepo_Continue(t *testing.T) {
@@ -160,4 +177,50 @@ func sumCounts(stats map[time.Time]int) int {
 		total += v
 	}
 	return total
+}
+
+func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, start, end time.Time, loc *time.Location, emailSet map[string]struct{}) map[time.Time]int {
+	t.Helper()
+
+	repo, err := git.PlainOpen(repoPath)
+	require.NoError(t, err)
+
+	startPoints, err := collectStartPoints(repo, repoPath, BranchOption{AllBranches: true})
+	require.NoError(t, err)
+
+	out := make(map[time.Time]int)
+	seenCommits := make(map[plumbing.Hash]struct{})
+
+	for _, from := range startPoints {
+		iterator, err := repo.Log(&git.LogOptions{From: from})
+		require.NoError(t, err)
+
+		iterErr := iterator.ForEach(func(c *object.Commit) error {
+			commitDay := beginningOfDay(c.Author.When, loc)
+			if commitDay.After(end) {
+				return nil
+			}
+			if commitDay.Before(start) {
+				return storer.ErrStop
+			}
+
+			if len(emailSet) > 0 {
+				if _, ok := emailSet[c.Author.Email]; !ok {
+					return nil
+				}
+			}
+
+			if _, seen := seenCommits[c.Hash]; seen {
+				// Legacy behavior: deduplicate counting only, but keep traversing.
+				return nil
+			}
+			seenCommits[c.Hash] = struct{}{}
+			out[commitDay]++
+			return nil
+		})
+		iterator.Close()
+		require.True(t, iterErr == nil || errors.Is(iterErr, storer.ErrStop))
+	}
+
+	return out
 }

@@ -244,6 +244,13 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 		}
 
 		iterErr := iterator.ForEach(func(c *object.Commit) error {
+			if branch.AllBranches {
+				if _, seen := seenCommits[c.Hash]; seen {
+					// 该提交及其祖先已在先前分支遍历中处理过，提前剪枝。
+					return storer.ErrStop
+				}
+			}
+
 			commitDay := beginningOfDay(c.Author.When, loc)
 			// 跳过超出结束日期的提交（git log 按时间倒序，早期提交可能乱序）
 			if commitDay.After(end) {
