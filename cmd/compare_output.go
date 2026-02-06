@@ -170,7 +170,7 @@ func mostActiveDayLabel(m stats.CompareMetrics) string {
 	if m.MostActiveWeekdayCommits <= 0 {
 		return "-"
 	}
-	return weekdayAbbrev(m.MostActiveWeekday)
+	return stats.WeekdayAbbrev(m.MostActiveWeekday)
 }
 
 // streakLabel 返回连续天数的显示标签（单复数处理）。

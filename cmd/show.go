@@ -182,7 +182,7 @@ func writeJSON(out io.Writer, st map[time.Time]int, includeSummary bool) error {
 			CurrentStreak: s.CurrentStreak,
 			LongestStreak: summaryStreak{Days: s.LongestStreak.Days},
 			MostActiveWeekday: summaryWeekday{
-				Weekday: weekdayAbbrev(s.MostActiveWeekday.Weekday),
+				Weekday: stats.WeekdayAbbrev(s.MostActiveWeekday.Weekday),
 				Commits: s.MostActiveWeekday.Commits,
 			},
 			PeakDay: summaryPeakDay{
@@ -230,13 +230,4 @@ func writeCSV(out io.Writer, st map[time.Time]int) error {
 	}
 	w.Flush()
 	return w.Error()
-}
-
-// weekdayAbbrev 返回星期几的 3 字符缩写（如 Mon, Tue）。
-func weekdayAbbrev(wd time.Weekday) string {
-	name := wd.String()
-	if len(name) > 3 {
-		return name[:3]
-	}
-	return name
 }

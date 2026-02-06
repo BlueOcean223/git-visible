@@ -169,7 +169,7 @@ func RenderSummary(s Summary) string {
 
 	mostLabel := "-"
 	if s.MostActiveWeekday.Commits > 0 {
-		mostLabel = weekdayAbbrev(s.MostActiveWeekday.Weekday)
+		mostLabel = WeekdayAbbrev(s.MostActiveWeekday.Weekday)
 	}
 
 	peakLabel := "-"
@@ -188,8 +188,8 @@ func RenderSummary(s Summary) string {
 	return b.String()
 }
 
-// weekdayAbbrev 返回星期几的 3 字符缩写（如 Mon, Tue）。
-func weekdayAbbrev(wd time.Weekday) string {
+// WeekdayAbbrev 返回星期几的 3 字符缩写（如 Mon, Tue）。
+func WeekdayAbbrev(wd time.Weekday) string {
 	name := wd.String()
 	if len(name) > 3 {
 		return name[:3]
