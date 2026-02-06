@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/spf13/viper"
 )
@@ -15,6 +16,12 @@ type Config struct {
 	Email  string // 默认的邮箱过滤条件
 	Months int    // 默认统计的月份数
 }
+
+var (
+	once     sync.Once
+	instance *Config
+	loadErr  error
+)
 
 // Dir 返回配置目录的路径 (~/.config/git-visible)。
 func Dir() (string, error) {
@@ -44,31 +51,37 @@ func EnsureDir() error {
 	return os.MkdirAll(dir, 0o700)
 }
 
-// Load 从配置文件加载配置。
+// Load 返回单例配置实例，首次调用时从配置文件加载。
 // 如果配置文件不存在，返回默认配置（months=6, email=""）。
-func Load() (Config, error) {
-	configFile, err := File()
-	if err != nil {
-		return Config{}, err
-	}
-
-	v := viper.New()
-	v.SetConfigFile(configFile)
-	v.SetConfigType("yaml")
-	v.SetDefault("months", DefaultMonths)
-	v.SetDefault("email", "")
-
-	if err := v.ReadInConfig(); err != nil {
-		// 配置文件不存在时静默忽略，使用默认值
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
-			return Config{}, err
+func Load() (*Config, error) {
+	once.Do(func() {
+		configFile, err := File()
+		if err != nil {
+			loadErr = err
+			return
 		}
-	}
 
-	return Config{
-		Email:  v.GetString("email"),
-		Months: v.GetInt("months"),
-	}, nil
+		v := viper.New()
+		v.SetConfigFile(configFile)
+		v.SetConfigType("yaml")
+		v.SetDefault("months", DefaultMonths)
+		v.SetDefault("email", "")
+
+		if err := v.ReadInConfig(); err != nil {
+			// 配置文件不存在时静默忽略，使用默认值
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
+				loadErr = err
+				return
+			}
+		}
+
+		instance = &Config{
+			Email:  v.GetString("email"),
+			Months: v.GetInt("months"),
+		}
+	})
+
+	return instance, loadErr
 }
 
 // Save 将配置保存到配置文件。
@@ -92,5 +105,13 @@ func Save(config Config) error {
 	if err := v.WriteConfigAs(configFile); err != nil {
 		return err
 	}
-	return os.Chmod(configFile, 0o600)
+	if err := os.Chmod(configFile, 0o600); err != nil {
+		return err
+	}
+
+	// 如果单例已加载，同步内存副本，避免后续读取到旧值。
+	if instance != nil {
+		*instance = config
+	}
+	return nil
 }

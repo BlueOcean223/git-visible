@@ -61,7 +61,7 @@ var setCmd = &cobra.Command{
 		}
 
 		// 保存修改后的配置
-		return config.Save(cfg)
+		return config.Save(*cfg)
 	},
 }
 
