@@ -17,62 +17,154 @@ const (
 	colorToday  = "\033[38;5;199m" // 粉色 - 今天（高亮显示）
 )
 
+const defaultHeatmapMonths = 6
+
+// HeatmapOptions controls what to include in the heatmap output.
+type HeatmapOptions struct {
+	ShowLegend  bool
+	ShowSummary bool
+	Since       time.Time // zero value = auto-calculated from months
+	Until       time.Time // zero value = now
+}
+
+// RenderHeatmapWithOptions renders a heatmap with the given options.
+func RenderHeatmapWithOptions(stats map[time.Time]int, opts HeatmapOptions) string {
+	start := opts.Since
+	end := opts.Until
+
+	loc := timeNow().Location()
+	if !end.IsZero() {
+		loc = end.Location()
+	} else if !start.IsZero() {
+		loc = start.Location()
+	}
+
+	if end.IsZero() {
+		end = beginningOfDay(timeNow(), loc)
+	}
+	if start.IsZero() {
+		start = heatmapStart(end, defaultHeatmapMonths)
+	}
+
+	return renderHeatmapRange(stats, start, end, opts.ShowLegend, opts.ShowSummary)
+}
+
 // RenderHeatmap 将统计数据渲染为类似 GitHub 的贡献热力图。
 // 热力图以周为列、星期几为行，使用不同颜色表示提交数量级别。
 // 返回包含 ANSI 颜色代码的字符串，可直接输出到终端。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmap(stats map[time.Time]int, months int) string {
 	start, end, err := TimeRange("", "", months)
 	if err != nil {
 		return ""
 	}
-	return renderHeatmapRange(stats, start, end, true, true)
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  true,
+		ShowSummary: true,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapNoLegend 渲染热力图但不包含图例。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapNoLegend(stats map[time.Time]int, months int) string {
 	start, end, err := TimeRange("", "", months)
 	if err != nil {
 		return ""
 	}
-	return renderHeatmapRange(stats, start, end, false, true)
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  false,
+		ShowSummary: true,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapNoSummary 渲染热力图但不包含摘要信息。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapNoSummary(stats map[time.Time]int, months int) string {
 	start, end, err := TimeRange("", "", months)
 	if err != nil {
 		return ""
 	}
-	return renderHeatmapRange(stats, start, end, true, false)
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  true,
+		ShowSummary: false,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapNoLegendNoSummary 渲染热力图但不包含图例和摘要信息。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapNoLegendNoSummary(stats map[time.Time]int, months int) string {
 	start, end, err := TimeRange("", "", months)
 	if err != nil {
 		return ""
 	}
-	return renderHeatmapRange(stats, start, end, false, false)
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  false,
+		ShowSummary: false,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapRange 将统计数据渲染为指定时间范围内的贡献热力图。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapRange(stats map[time.Time]int, start, end time.Time) string {
-	return renderHeatmapRange(stats, start, end, true, true)
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  true,
+		ShowSummary: true,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapRangeNoLegend 渲染指定时间范围内的热力图，但不包含图例。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapRangeNoLegend(stats map[time.Time]int, start, end time.Time) string {
-	return renderHeatmapRange(stats, start, end, false, true)
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  false,
+		ShowSummary: true,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapRangeNoSummary 渲染指定时间范围内的热力图，但不包含摘要信息。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapRangeNoSummary(stats map[time.Time]int, start, end time.Time) string {
-	return renderHeatmapRange(stats, start, end, true, false)
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  true,
+		ShowSummary: false,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // RenderHeatmapRangeNoLegendNoSummary 渲染指定时间范围内的热力图，但不包含图例和摘要信息。
+// Deprecated: Use RenderHeatmapWithOptions instead.
 func RenderHeatmapRangeNoLegendNoSummary(stats map[time.Time]int, start, end time.Time) string {
-	return renderHeatmapRange(stats, start, end, false, false)
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	return RenderHeatmapWithOptions(stats, HeatmapOptions{
+		ShowLegend:  false,
+		ShowSummary: false,
+		Since:       start,
+		Until:       end,
+	})
 }
 
 // renderHeatmapRange 是热力图渲染的核心实现。

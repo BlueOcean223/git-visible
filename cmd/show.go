@@ -92,16 +92,12 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	// 根据指定格式输出结果
 	switch strings.ToLower(strings.TrimSpace(showFormat)) {
 	case "", "table":
-		switch {
-		case showLegend && showSummary:
-			fmt.Fprint(out, stats.RenderHeatmapRange(st, runCtx.Since, runCtx.Until))
-		case showLegend && !showSummary:
-			fmt.Fprint(out, stats.RenderHeatmapRangeNoSummary(st, runCtx.Since, runCtx.Until))
-		case !showLegend && showSummary:
-			fmt.Fprint(out, stats.RenderHeatmapRangeNoLegend(st, runCtx.Since, runCtx.Until))
-		default:
-			fmt.Fprint(out, stats.RenderHeatmapRangeNoLegendNoSummary(st, runCtx.Since, runCtx.Until))
-		}
+		fmt.Fprint(out, stats.RenderHeatmapWithOptions(st, stats.HeatmapOptions{
+			ShowLegend:  showLegend,
+			ShowSummary: showSummary,
+			Since:       runCtx.Since,
+			Until:       runCtx.Until,
+		}))
 		return nil
 	case "json":
 		return writeJSON(out, st, showSummary)
