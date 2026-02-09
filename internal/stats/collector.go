@@ -58,10 +58,9 @@ func CollectStats(repos []string, emails []string, start, end time.Time, branch 
 		Until:     end,
 		Branch:    branch.Branch,
 		AllBranch: branch.AllBranches,
-	}, func(_ string, daily map[string]int) {
-		for day, count := range daily {
-			t, _ := time.ParseInLocation("2006-01-02", day, loc)
-			out[t] += count
+	}, func(_ string, daily map[int]int) {
+		for dayKey, count := range daily {
+			out[dayKeyToTime(dayKey, loc)] += count
 		}
 	})
 	if err != nil && done == nil {
@@ -83,11 +82,10 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 		Until:     end,
 		Branch:    branch.Branch,
 		AllBranch: branch.AllBranches,
-	}, func(repoPath string, daily map[string]int) {
+	}, func(repoPath string, daily map[int]int) {
 		stats := make(map[time.Time]int, len(daily))
-		for day, count := range daily {
-			t, _ := time.ParseInLocation("2006-01-02", day, loc)
-			stats[t] = count
+		for dayKey, count := range daily {
+			stats[dayKeyToTime(dayKey, loc)] = count
 		}
 		out[repoPath] = stats
 	})
@@ -97,7 +95,7 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 	return out, err
 }
 
-func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily map[string]int)) ([]string, error) {
+func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily map[int]int)) ([]string, error) {
 	if opts.Since.IsZero() {
 		return nil, fmt.Errorf("start must be set")
 	}
@@ -120,6 +118,8 @@ func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily m
 	if start.After(end) {
 		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	}
+	startDayKey := dayKeyFromTime(start, loc)
+	endDayKey := dayKeyFromTime(end, loc)
 
 	emailSet := make(map[string]struct{}, len(opts.Emails))
 	for _, email := range opts.Emails {
@@ -161,7 +161,7 @@ func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily m
 				pmu.Unlock()
 			}()
 
-			stats, err := collectRepo(repoPath, start, end, loc, emailSet, branch)
+			stats, err := collectRepo(repoPath, startDayKey, endDayKey, loc, emailSet, branch)
 			if err != nil {
 				emu.Lock()
 				errs = append(errs, err)
@@ -169,13 +169,8 @@ func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily m
 				return
 			}
 
-			daily := make(map[string]int, len(stats))
-			for day, count := range stats {
-				daily[day.Format("2006-01-02")] = count
-			}
-
 			mu.Lock()
-			aggregator(repoPath, daily)
+			aggregator(repoPath, stats)
 			done = append(done, repoPath)
 			mu.Unlock()
 		}(repoPath)
@@ -216,9 +211,12 @@ func newRepoProgressBar(total int) *progressbar.ProgressBar {
 }
 
 // collectRepo 收集单个仓库在指定时间范围内的提交统计。
-// 遍历从 HEAD 开始的提交历史，按作者邮箱过滤（如果指定），
-// 按日期聚合提交数量。
-func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[time.Time]int, error) {
+//
+// 设计约束：
+//   - 统计口径基于 Author.When，且 Author.When 不保证单调，禁止据此提前终止遍历。
+//   - 禁止基于 Author.When 或 Committer.When 的 < start 重新引入 ErrStop。
+//   - 性能保障依赖邮箱过滤前移、dayKey 轻量聚合、以及 --all-branches 下的 hash 剪枝。
+func collectRepo(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[int]int, error) {
 	if _, err := os.Stat(repoPath); err != nil {
 		return nil, fmt.Errorf("stat repo %s: %w", repoPath, err)
 	}
@@ -229,7 +227,11 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 		return nil, fmt.Errorf("open repo %s: %w", repoPath, err)
 	}
 
-	out := make(map[time.Time]int)
+	return collectRepoFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch)
+}
+
+func collectRepoFromRepository(repo *git.Repository, repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[int]int, error) {
+	out := make(map[int]int)
 	startPoints, err := collectStartPoints(repo, repoPath, branch)
 	if err != nil {
 		return nil, err
@@ -249,34 +251,27 @@ func collectRepo(repoPath string, start, end time.Time, loc *time.Location, emai
 					// 该提交及其祖先已在先前分支遍历中处理过，提前剪枝。
 					return storer.ErrStop
 				}
+				seenCommits[c.Hash] = struct{}{}
 			}
 
-			commitDay := beginningOfDay(c.Author.When, loc)
-			// 跳过超出结束日期的提交（git log 按时间倒序，早期提交可能乱序）
-			if commitDay.After(end) {
-				return nil
-			}
-			// 提交早于起始日期时停止遍历（利用时间倒序特性提前退出）
-			if commitDay.Before(start) {
-				return storer.ErrStop
-			}
-
-			// 邮箱过滤：仅统计指定作者的提交
+			// 邮箱过滤前移：无关邮箱直接跳过，避免后续时间归一化开销。
 			if len(emailSet) > 0 {
 				if _, ok := emailSet[c.Author.Email]; !ok {
 					return nil
 				}
 			}
 
-			// 多分支模式下按 commit hash 去重，避免合并提交被重复计数
-			if branch.AllBranches {
-				if _, ok := seenCommits[c.Hash]; ok {
-					return nil
-				}
-				seenCommits[c.Hash] = struct{}{}
+			commitDayKey := dayKeyFromTime(c.Author.When, loc)
+			// 跳过超出结束日期的提交（git log 按时间倒序，早期提交可能乱序）
+			if commitDayKey > endDayKey {
+				return nil
+			}
+			// 提交早于起始日期时仅跳过，继续遍历，避免乱序历史漏算。
+			if commitDayKey < startDayKey {
+				return nil
 			}
 
-			out[commitDay]++
+			out[commitDayKey]++
 			return nil
 		})
 		iterator.Close()
@@ -358,6 +353,20 @@ func collectStartPoints(repo *git.Repository, repoPath string, branch BranchOpti
 func beginningOfDay(t time.Time, loc *time.Location) time.Time {
 	t = t.In(loc)
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+}
+
+// dayKeyFromTime 将时间转换为日粒度整数键（yyyymmdd）。
+func dayKeyFromTime(t time.Time, loc *time.Location) int {
+	t = t.In(loc)
+	return t.Year()*10000 + int(t.Month())*100 + t.Day()
+}
+
+// dayKeyToTime 将日粒度整数键（yyyymmdd）转换为当天 00:00:00。
+func dayKeyToTime(dayKey int, loc *time.Location) time.Time {
+	year := dayKey / 10000
+	month := (dayKey / 100) % 100
+	day := dayKey % 100
+	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, loc)
 }
 
 // heatmapStart 计算热力图的起始日期。

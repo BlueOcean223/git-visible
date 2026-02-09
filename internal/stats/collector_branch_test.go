@@ -64,9 +64,11 @@ func TestCollectRepo_AllBranches_PruningIdempotent(t *testing.T) {
 	loc := time.Local
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, loc)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, loc)
+	startDayKey := dayKeyFromTime(start, loc)
+	endDayKey := dayKeyFromTime(end, loc)
 
-	legacy := collectRepoAllBranchesWithoutPruning(t, repoPath, start, end, loc, map[string]struct{}{})
-	got, err := collectRepo(repoPath, start, end, loc, map[string]struct{}{}, BranchOption{AllBranches: true})
+	legacy := collectRepoAllBranchesWithoutPruning(t, repoPath, startDayKey, endDayKey, loc, map[string]struct{}{})
+	got, err := collectRepo(repoPath, startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{AllBranches: true})
 	require.NoError(t, err)
 	assert.Equal(t, legacy, got, "pruning must not change --all-branches results")
 }
@@ -179,7 +181,7 @@ func sumCounts(stats map[time.Time]int) int {
 	return total
 }
 
-func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, start, end time.Time, loc *time.Location, emailSet map[string]struct{}) map[time.Time]int {
+func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}) map[int]int {
 	t.Helper()
 
 	repo, err := git.PlainOpen(repoPath)
@@ -188,7 +190,7 @@ func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, start, 
 	startPoints, err := collectStartPoints(repo, repoPath, BranchOption{AllBranches: true})
 	require.NoError(t, err)
 
-	out := make(map[time.Time]int)
+	out := make(map[int]int)
 	seenCommits := make(map[plumbing.Hash]struct{})
 
 	for _, from := range startPoints {
@@ -196,11 +198,11 @@ func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, start, 
 		require.NoError(t, err)
 
 		iterErr := iterator.ForEach(func(c *object.Commit) error {
-			commitDay := beginningOfDay(c.Author.When, loc)
-			if commitDay.After(end) {
+			commitDayKey := dayKeyFromTime(c.Author.When, loc)
+			if commitDayKey > endDayKey {
 				return nil
 			}
-			if commitDay.Before(start) {
+			if commitDayKey < startDayKey {
 				return storer.ErrStop
 			}
 
@@ -215,7 +217,7 @@ func collectRepoAllBranchesWithoutPruning(t *testing.T, repoPath string, start, 
 				return nil
 			}
 			seenCommits[c.Hash] = struct{}{}
-			out[commitDay]++
+			out[commitDayKey]++
 			return nil
 		})
 		iterator.Close()
