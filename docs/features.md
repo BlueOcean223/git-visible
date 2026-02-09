@@ -19,6 +19,16 @@
 ### 3. 配置管理
 - **持久化配置** (`set`)：默认邮箱、统计月数
 - **配置查看**：无参数时显示当前配置
+- **邮箱别名** (`aliases`)：配置文件支持将多个邮箱映射为同一身份，收集时自动规范化
+
+### 4. 环境诊断
+- **doctor 命令** (`doctor`)：一站式环境诊断，检查配置合法性、仓库路径有效性、分支可达性、权限、性能预警
+
+### 5. 结果缓存
+- **自动缓存**：按仓库 HEAD hash 缓存统计结果，未变化时跳过扫描
+- **缓存失效**：HEAD hash 变化自动失效
+- **`--no-cache`**：支持强制全量扫描
+- **存储位置**：`~/.config/git-visible/cache/`
 
 ## 功能实现映射
 
@@ -39,6 +49,10 @@
 | 百分比变化 | `cmd/compare.go` | `internal/stats/compare.go:CalculatePercentChange()` |
 | 命令初始化 | `cmd/show.go` / `cmd/top.go` / `cmd/compare.go` | `cmd/common.go:prepareRun()` |
 | 读写配置 | `cmd/set.go` | `internal/config/config.go:Load()/Save()` |
+| 环境诊断 | `cmd/doctor.go` | `internal/repo/doctor.go` |
+| 结果缓存 | `internal/stats/collector.go` | `internal/cache/cache.go` |
+| 邮箱别名 | `cmd/common.go` | `internal/config/config.go:NormalizeEmail()` |
+| 邮箱分桶收集 | `cmd/compare.go` | `internal/stats/collector.go:CollectStatsByEmails()` |
 
 ## 扩展点
 

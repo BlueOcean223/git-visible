@@ -29,6 +29,7 @@
 | `--format` | `-f` | string | table | 输出格式：table/json/csv |
 | `--no-legend` | - | bool | false | 隐藏图例 |
 | `--no-summary` | - | bool | false | 隐藏摘要信息 |
+| `--no-cache` | - | bool | false | 禁用结果缓存，强制全量扫描 |
 
 ### top
 | 参数 | 短写 | 类型 | 默认值 | 说明 |
@@ -40,6 +41,7 @@
 | `--since` | - | string | - | 起始日期 |
 | `--until` | - | string | - | 结束日期 |
 | `--format` | `-f` | string | table | 输出格式：table/json/csv |
+| `--no-cache` | - | bool | false | 禁用结果缓存，强制全量扫描 |
 
 ### compare
 | 参数 | 短写 | 类型 | 默认值 | 说明 |
@@ -48,6 +50,7 @@
 | `--period` | - | stringArray | - | 对比的时间段（至少 2 个） |
 | `--year` | - | intSlice | - | 对比的年份（--period YYYY 快捷方式） |
 | `--format` | `-f` | string | table | 输出格式：table/json/csv |
+| `--no-cache` | - | bool | false | 禁用结果缓存，强制全量扫描 |
 
 **时间段格式**：`YYYY`（整年）、`YYYY-H1`/`YYYY-H2`（半年）、`YYYY-Q1`~`YYYY-Q4`（季度）、`YYYY-MM`（单月）
 

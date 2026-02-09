@@ -24,10 +24,11 @@ CLI tool using Cobra/Viper that aggregates git commit history from multiple loca
 **Entry flow**: `main.go` → `cmd.Execute()` → Cobra routes to subcommand
 
 **Packages**:
-- `cmd/` - Cobra commands (root, show, top, compare, add, list, remove, set, version), plus shared command init (`common.go`) and compare output formatting (`compare_output.go`)
-- `internal/config/` - Config file management (`~/.config/git-visible/config.yaml`), loaded as a singleton via `sync.Once`
-- `internal/repo/` - Repository storage (`~/.config/git-visible/repos`) and directory scanning
-- `internal/stats/` - Commit collection, heatmap rendering, ranking, and comparison metrics
+- `cmd/` - Cobra commands (root, show, top, compare, add, list, remove, set, doctor, version), plus shared command init (`common.go`) and compare output formatting (`compare_output.go`)
+- `internal/config/` - Config file management (`~/.config/git-visible/config.yaml`), loaded as a singleton via `sync.Once`. Supports email aliases (`NormalizeEmail`)
+- `internal/repo/` - Repository storage (`~/.config/git-visible/repos`), directory scanning, and environment diagnostics (`doctor.go`)
+- `internal/stats/` - Commit collection (with per-repo HEAD-based caching), heatmap rendering, ranking, and comparison metrics. Supports single-pass multi-email bucketing (`CollectStatsByEmails`)
+- `internal/cache/` - JSON-based result cache (`~/.config/git-visible/cache/`), keyed by repo path + HEAD hash + emails + time range + branch
 
 **Key dependencies**: go-git (git operations), cobra (CLI), viper (config), progressbar (progress display)
 
