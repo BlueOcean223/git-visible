@@ -30,6 +30,15 @@ func prepareRun(emails []string, months int, since, until string) (*RunContext, 
 		return nil, err
 	}
 
+	// 清洗命令行传入的邮箱参数
+	cleanedEmails := make([]string, 0, len(emails))
+	for _, email := range emails {
+		email = strings.TrimSpace(email)
+		if email != "" {
+			cleanedEmails = append(cleanedEmails, email)
+		}
+	}
+
 	repos, err := repo.LoadRepos()
 	if err != nil {
 		return nil, err
@@ -55,7 +64,7 @@ func prepareRun(emails []string, months int, since, until string) (*RunContext, 
 		return nil, err
 	}
 
-	mergedEmails := emails
+	mergedEmails := cleanedEmails
 	if len(mergedEmails) == 0 && strings.TrimSpace(cfg.Email) != "" {
 		mergedEmails = []string{strings.TrimSpace(cfg.Email)}
 	}

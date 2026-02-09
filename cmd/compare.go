@@ -61,8 +61,9 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 	out := cmd.OutOrStdout()
 	format := strings.ToLower(strings.TrimSpace(compareFormat))
 
-	// 清理并合并对比参数：--period 和 --year 合并为统一的时间段列表
+	// 防御性清洗 compareEmails，用于模式判定，避免被配置邮箱回填影响。
 	emails := cleanNonEmpty(compareEmails)
+	// 清理并合并对比参数：--period 和 --year 合并为统一的时间段列表
 	periodArgs := cleanNonEmpty(append(append([]string{}, comparePeriods...), yearsToPeriods(compareYears)...))
 
 	prepareSince := "1970-01-01"
@@ -72,7 +73,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 		prepareUntil = ""
 	}
 
-	runCtx, err := prepareRun(nil, 0, prepareSince, prepareUntil)
+	runCtx, err := prepareRun(compareEmails, 0, prepareSince, prepareUntil)
 	if err != nil {
 		if errors.Is(err, errNoRepositoriesAdded) {
 			fmt.Fprintln(out, "no repositories added")

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"git-visible/internal/config"
 	"git-visible/internal/stats"
 
 	"github.com/go-git/go-git/v5"
@@ -244,6 +245,40 @@ func TestTop_PartialFailure_WarnsAndContinues(t *testing.T) {
 	assert.Equal(t, repoPath, got.Repositories[0].Repository)
 }
 
+func TestTop_EmailFlagWithWhitespace_IsTrimmed(t *testing.T) {
+	home := withTempHome(t)
+	setTestConfig(t, config.Config{Email: "", Months: config.DefaultMonths})
+
+	repoPath := filepath.Join(home, "code", "repo-1")
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithCommits(t, repoPath, 2, "user@example.com", base)
+	writeReposFile(t, home, []string{repoPath})
+
+	resetTopFlags()
+	c := &cobra.Command{
+		Use:   "top",
+		Short: "Show top repositories by commits",
+		Args:  cobra.NoArgs,
+		RunE:  runTop,
+	}
+	addTopFlagsForTest(c)
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+	c.SetArgs([]string{"-e", " user@example.com ", "--since", "2025-01-01", "--until", "2025-12-31", "--format", "json", "--all"})
+
+	err := c.Execute()
+	require.NoError(t, err, "stderr=%s", errBuf.String())
+
+	var got stats.RepoRanking
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "output=%s", out.String())
+	require.Len(t, got.Repositories, 1)
+	assert.Equal(t, 2, got.TotalCommits)
+	assert.Equal(t, 2, got.Repositories[0].Commits)
+}
+
 func resetTopFlags() {
 	topEmails = nil
 	topMonths = 0
@@ -252,6 +287,18 @@ func resetTopFlags() {
 	topFormat = "table"
 	topNumber = 10
 	topAll = false
+}
+
+func addTopFlagsForTest(cmd *cobra.Command) {
+	cmd.Flags().IntVarP(&topNumber, "number", "n", 10, "Number of repositories to show")
+	cmd.Flags().BoolVar(&topAll, "all", false, "Show all repositories")
+	cmd.MarkFlagsMutuallyExclusive("number", "all")
+
+	cmd.Flags().StringArrayVarP(&topEmails, "email", "e", nil, "Email filter (repeatable)")
+	cmd.Flags().IntVarP(&topMonths, "months", "m", 0, "Months to include (default: config value; ignored when --since/--until is set)")
+	cmd.Flags().StringVar(&topSince, "since", "", "Start date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
+	cmd.Flags().StringVar(&topUntil, "until", "", "End date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
+	cmd.Flags().StringVarP(&topFormat, "format", "f", "table", "Output format: table/json/csv")
 }
 
 func withTempHome(t *testing.T) string {

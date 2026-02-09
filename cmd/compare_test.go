@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"git-visible/internal/config"
+
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/spf13/cobra"
@@ -269,11 +271,63 @@ func TestCompare_PartialFailure_WarnsAndContinues(t *testing.T) {
 	assert.Equal(t, 1, got.Items[1].TotalCommits)
 }
 
+func TestCompare_EmailFlagsWithWhitespace_AreTrimmed(t *testing.T) {
+	home := withTempHome(t)
+	setTestConfig(t, config.Config{Email: "", Months: config.DefaultMonths})
+
+	repoPath := filepath.Join(home, "code", "repo-1")
+	base := timeNowLocal().AddDate(0, 0, -1)
+	specs := []commitSpec{
+		{Email: "user@example.com", When: base.Add(12 * time.Hour)},
+		{Email: "user@example.com", When: base.Add(12*time.Hour + 1*time.Minute)},
+		{Email: "other@example.com", When: base.Add(13 * time.Hour)},
+	}
+	createRepoWithCommitSpecs(t, repoPath, specs)
+	writeReposFile(t, home, []string{repoPath})
+
+	resetCompareFlags()
+	c := &cobra.Command{
+		Use:   "compare",
+		Short: "Compare contribution stats by email or period",
+		Args:  cobra.NoArgs,
+		RunE:  runCompare,
+	}
+	addCompareFlagsForTest(c)
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+	c.SetArgs([]string{"-e", " user@example.com ", "-e", " other@example.com ", "--format", "json"})
+
+	err := c.Execute()
+	require.NoError(t, err, "stderr=%s", errBuf.String())
+
+	var got compareJSONOutput
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "output=%s", out.String())
+	require.Equal(t, "email", got.Dimension)
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, "user@example.com", got.Items[0].Label)
+	assert.Equal(t, 2, got.Items[0].TotalCommits)
+	assert.Equal(t, "other@example.com", got.Items[1].Label)
+	assert.Equal(t, 1, got.Items[1].TotalCommits)
+}
+
 func resetCompareFlags() {
 	compareEmails = nil
 	comparePeriods = nil
 	compareYears = nil
 	compareFormat = "table"
+}
+
+func addCompareFlagsForTest(cmd *cobra.Command) {
+	cmd.Flags().StringArrayVarP(&compareEmails, "email", "e", nil, "Emails to compare (repeatable)")
+	cmd.Flags().StringArrayVar(&comparePeriods, "period", nil, "Periods to compare (repeatable): YYYY, YYYY-HN, YYYY-QN, YYYY-MM")
+	cmd.Flags().IntSliceVar(&compareYears, "year", nil, "Years to compare (repeatable; shortcut for --period YYYY)")
+	cmd.Flags().StringVarP(&compareFormat, "format", "f", "table", "Output format: table/json/csv")
+
+	cmd.MarkFlagsMutuallyExclusive("email", "period")
+	cmd.MarkFlagsMutuallyExclusive("email", "year")
 }
 
 func createRepoWithCommitSpecs(t *testing.T, path string, specs []commitSpec) {
