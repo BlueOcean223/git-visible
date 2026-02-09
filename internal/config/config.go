@@ -15,8 +15,15 @@ const DefaultMonths = 6
 
 // Config 表示应用配置。
 type Config struct {
-	Email  string // 默认的邮箱过滤条件
-	Months int    // 默认统计的月份数
+	Months  int     `mapstructure:"months" yaml:"months"`   // 默认统计的月份数
+	Email   string  `mapstructure:"email" yaml:"email"`     // 默认的邮箱过滤条件
+	Aliases []Alias `mapstructure:"aliases" yaml:"aliases"` // 作者身份别名映射
+}
+
+// Alias 定义一个作者身份及其关联邮箱。
+type Alias struct {
+	Name   string   `mapstructure:"name" yaml:"name"`
+	Emails []string `mapstructure:"emails" yaml:"emails"`
 }
 
 var (
@@ -77,9 +84,16 @@ func Load() (*Config, error) {
 			}
 		}
 
+		aliases := make([]Alias, 0)
+		if err := v.UnmarshalKey("aliases", &aliases); err != nil {
+			loadErr = err
+			return
+		}
+
 		instance = &Config{
-			Email:  v.GetString("email"),
-			Months: v.GetInt("months"),
+			Email:   v.GetString("email"),
+			Months:  v.GetInt("months"),
+			Aliases: aliases,
 		}
 	})
 
@@ -102,6 +116,7 @@ func Save(config Config) error {
 	v.SetConfigType("yaml")
 	v.Set("email", config.Email)
 	v.Set("months", config.Months)
+	v.Set("aliases", config.Aliases)
 
 	// 将配置写入文件（viper 默认 0644，需手动修正权限）
 	if err := v.WriteConfigAs(configFile); err != nil {
@@ -116,6 +131,35 @@ func Save(config Config) error {
 		*instance = config
 	}
 	return nil
+}
+
+// NormalizeEmail 根据 alias 配置将邮箱规范化为主邮箱（每组第一个邮箱）。
+// 匹配逻辑大小写不敏感，并对输入及配置邮箱执行 TrimSpace。
+// 若无匹配则返回原始输入值。
+func (c *Config) NormalizeEmail(email string) string {
+	if c == nil || len(c.Aliases) == 0 {
+		return email
+	}
+
+	target := strings.TrimSpace(email)
+	if target == "" {
+		return email
+	}
+
+	for _, alias := range c.Aliases {
+		if len(alias.Emails) == 0 {
+			continue
+		}
+
+		primary := strings.TrimSpace(alias.Emails[0])
+		for _, aliasEmail := range alias.Emails {
+			if strings.EqualFold(target, strings.TrimSpace(aliasEmail)) {
+				return primary
+			}
+		}
+	}
+
+	return email
 }
 
 // ValidateConfig 检查配置合法性，返回问题列表。

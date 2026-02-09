@@ -35,7 +35,7 @@ func TestCollectRepo_OutOfOrderAuthorWhen_NoMissInRange(t *testing.T) {
 	startDayKey := dayKeyFromTime(time.Date(2024, 1, 10, 0, 0, 0, 0, loc), loc)
 	endDayKey := dayKeyFromTime(time.Date(2024, 1, 20, 0, 0, 0, 0, loc), loc)
 
-	got, err := collectRepoFromRepository(repo, "mem://out-of-order", startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{})
+	got, err := collectRepoFromRepository(repo, "mem://out-of-order", startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{}, nil)
 	require.NoError(t, err)
 
 	want := map[int]int{
@@ -108,7 +108,7 @@ func TestCollectRepo_TimeRangeBoundaryScenarios(t *testing.T) {
 
 			startDayKey := dayKeyFromTime(tt.start, loc)
 			endDayKey := dayKeyFromTime(tt.end, loc)
-			got, err := collectRepoFromRepository(repo, "mem://boundary", startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{})
+			got, err := collectRepoFromRepository(repo, "mem://boundary", startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{}, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})

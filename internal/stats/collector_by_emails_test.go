@@ -36,12 +36,12 @@ func TestCollectStatsByEmails_MemoryRepoBuckets(t *testing.T) {
 	}
 
 	originalCollect := collectRepoByEmailsFn
-	collectRepoByEmailsFn = func(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[string]map[int]int, error) {
+	collectRepoByEmailsFn = func(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string) (map[string]map[int]int, error) {
 		repo, ok := repos[repoPath]
 		if !ok {
 			return nil, fmt.Errorf("unknown repo %s", repoPath)
 		}
-		return collectRepoByEmailsFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch)
+		return collectRepoByEmailsFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
 	}
 	t.Cleanup(func() {
 		collectRepoByEmailsFn = originalCollect
@@ -56,6 +56,7 @@ func TestCollectStatsByEmails_MemoryRepoBuckets(t *testing.T) {
 		start,
 		end,
 		BranchOption{},
+		nil,
 	)
 	require.NoError(t, err)
 

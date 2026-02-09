@@ -1,9 +1,13 @@
 package stats
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"git-visible/internal/config"
+
+	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -123,7 +127,7 @@ func TestCollectStats_AllReposFail_ReturnsErrorAndEmptyMap(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{"/non/existent/repo-a", "/non/existent/repo-b"}, nil, start, end, BranchOption{})
+	got, err := CollectStats([]string{"/non/existent/repo-a", "/non/existent/repo-b"}, nil, start, end, BranchOption{}, nil)
 	require.Error(t, err)
 	assert.Empty(t, got)
 }
@@ -136,7 +140,7 @@ func TestCollectStats_PartialRepoFailure_ReturnsErrorAndPartialData(t *testing.T
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath, "/non/existent/repo"}, nil, start, end, BranchOption{})
+	got, err := CollectStats([]string{repoPath, "/non/existent/repo"}, nil, start, end, BranchOption{}, nil)
 	require.Error(t, err)
 	assert.NotEmpty(t, got)
 	assert.Greater(t, sumCounts(got), 0)
@@ -152,8 +156,48 @@ func TestCollectStats_AllReposSuccess_ReturnsNilError(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoA, repoB}, nil, start, end, BranchOption{})
+	got, err := CollectStats([]string{repoA, repoB}, nil, start, end, BranchOption{}, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, got)
 	assert.Greater(t, sumCounts(got), 0)
+}
+
+func TestCollectStats_AliasMergeCountsCombined(t *testing.T) {
+	loc := time.UTC
+	repo, wt := initMemoryGitRepo(t)
+
+	commitMemoryFile(t, wt, "activity.txt", "alice-work-1\n", "alice@company.com", time.Date(2024, 1, 1, 10, 0, 0, 0, loc))
+	commitMemoryFile(t, wt, "activity.txt", "alice-gmail\n", "alice@gmail.com", time.Date(2024, 1, 2, 10, 0, 0, 0, loc))
+	commitMemoryFile(t, wt, "activity.txt", "alice-work-2\n", "alice@company.com", time.Date(2024, 1, 3, 10, 0, 0, 0, loc))
+
+	repos := map[string]*git.Repository{
+		"mem://alias-repo": repo,
+	}
+
+	originalCollect := collectRepoFn
+	collectRepoFn = func(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string) (map[int]int, error) {
+		repository, ok := repos[repoPath]
+		if !ok {
+			return nil, fmt.Errorf("unknown repo %s", repoPath)
+		}
+		return collectRepoFromRepository(repository, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+	}
+	t.Cleanup(func() {
+		collectRepoFn = originalCollect
+	})
+
+	cfg := &config.Config{
+		Aliases: []config.Alias{
+			{
+				Name:   "Alice",
+				Emails: []string{"alice@company.com", "alice@gmail.com"},
+			},
+		},
+	}
+
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
+	end := time.Date(2024, 1, 3, 0, 0, 0, 0, loc)
+	got, err := CollectStats([]string{"mem://alias-repo"}, []string{"alice@company.com"}, start, end, BranchOption{}, cfg.NormalizeEmail)
+	require.NoError(t, err)
+	assert.Equal(t, 3, sumCounts(got))
 }

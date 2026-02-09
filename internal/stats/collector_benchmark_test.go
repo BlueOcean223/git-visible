@@ -54,7 +54,7 @@ func BenchmarkCollectRepo_HotPath(b *testing.B) {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				stats, err := collectRepoFromRepository(bm.repo, "mem://"+bm.name, bm.start, bm.end, loc, emailSet, bm.branchOpt)
+				stats, err := collectRepoFromRepository(bm.repo, "mem://"+bm.name, bm.start, bm.end, loc, emailSet, bm.branchOpt, nil)
 				if err != nil {
 					b.Fatalf("collect failed: %v", err)
 				}

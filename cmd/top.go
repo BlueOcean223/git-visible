@@ -71,8 +71,13 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	since := strings.TrimSpace(topSince)
 	until := strings.TrimSpace(topUntil)
 
+	var normalizeEmail func(string) string
+	if runCtx.Config != nil && len(runCtx.Config.Aliases) > 0 {
+		normalizeEmail = runCtx.Config.NormalizeEmail
+	}
+
 	// 按仓库分别收集提交统计
-	perRepo, collectErr := stats.CollectStatsPerRepo(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{})
+	perRepo, collectErr := stats.CollectStatsPerRepo(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{}, normalizeEmail)
 	if collectErr != nil {
 		if len(perRepo) == 0 {
 			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)

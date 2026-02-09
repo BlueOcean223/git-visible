@@ -171,6 +171,12 @@ git-visible doctor
 ```yaml
 email: "your@email.com"
 months: 6
+aliases:
+  - name: "Alice"
+    emails:
+      - alice@company.com
+      - alice@gmail.com
+      - alice.old@company.com
 ```
 
 仓库列表存储：`~/.config/git-visible/repos`

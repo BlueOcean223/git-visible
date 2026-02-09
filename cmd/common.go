@@ -18,6 +18,7 @@ type RunContext struct {
 	Emails []string
 	Since  time.Time
 	Until  time.Time
+	Config *config.Config
 
 	months int
 }
@@ -74,6 +75,7 @@ func prepareRun(emails []string, months int, since, until string) (*RunContext, 
 		Emails: mergedEmails,
 		Since:  start,
 		Until:  end,
+		Config: cfg,
 		months: resolvedMonths,
 	}, nil
 }

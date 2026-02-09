@@ -24,7 +24,7 @@ func TestCollectStats_Branch_MainOnly(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "main"})
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "main"}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 3, sumCounts(got), "should only include commits reachable from main")
 }
@@ -37,7 +37,7 @@ func TestCollectStats_Branch_Nonexistent_WarningSkip(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "nonexistent"})
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "nonexistent"}, nil)
 	require.Error(t, err)
 	assert.Empty(t, got)
 	assert.Contains(t, err.Error(), `branch "nonexistent" not found`)
@@ -51,7 +51,7 @@ func TestCollectStats_AllBranches_DedupByHash(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{AllBranches: true})
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{AllBranches: true}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 4, sumCounts(got), "should de-duplicate commits reachable from multiple branches")
 }
@@ -68,7 +68,7 @@ func TestCollectRepo_AllBranches_PruningIdempotent(t *testing.T) {
 	endDayKey := dayKeyFromTime(end, loc)
 
 	legacy := collectRepoAllBranchesWithoutPruning(t, repoPath, startDayKey, endDayKey, loc, map[string]struct{}{})
-	got, err := collectRepo(repoPath, startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{AllBranches: true})
+	got, err := collectRepo(repoPath, startDayKey, endDayKey, loc, map[string]struct{}{}, BranchOption{AllBranches: true}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, legacy, got, "pruning must not change --all-branches results")
 }
@@ -84,7 +84,7 @@ func TestCollectStats_Branch_MissingInOneRepo_Continue(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoMain, repoNoMain}, nil, start, end, BranchOption{Branch: "main"})
+	got, err := CollectStats([]string{repoMain, repoNoMain}, nil, start, end, BranchOption{Branch: "main"}, nil)
 	require.Error(t, err, "missing branch should be a warning, not fatal")
 	assert.Equal(t, 2, sumCounts(got))
 	assert.Contains(t, err.Error(), repoNoMain)

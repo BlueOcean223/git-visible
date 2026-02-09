@@ -82,13 +82,18 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	var normalizeEmail func(string) string
+	if runCtx.Config != nil && len(runCtx.Config.Aliases) > 0 {
+		normalizeEmail = runCtx.Config.NormalizeEmail
+	}
+
 	switch {
 	case len(emails) > 0:
 		if len(emails) < 2 {
 			return fmt.Errorf("at least 2 emails are required to compare")
 		}
 
-		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until)
+		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until, normalizeEmail)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -121,7 +126,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			periods = append(periods, period)
 		}
 
-		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails)
+		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails, normalizeEmail)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -146,13 +151,17 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 }
 
 // collectCompareByEmail 按邮箱收集对比数据。
-func collectCompareByEmail(repos []string, emails []string, start, end time.Time) ([]emailCompareItem, error, bool) {
-	byEmail, err := stats.CollectStatsByEmails(repos, emails, start, end, stats.BranchOption{})
+func collectCompareByEmail(repos []string, emails []string, start, end time.Time, normalizeEmail func(string) string) ([]emailCompareItem, error, bool) {
+	byEmail, err := stats.CollectStatsByEmails(repos, emails, start, end, stats.BranchOption{}, normalizeEmail)
 	allFailed := err != nil && byEmail == nil
 
 	items := make([]emailCompareItem, 0, len(emails))
 	for _, email := range emails {
-		daily := byEmail[email]
+		lookupEmail := email
+		if normalizeEmail != nil {
+			lookupEmail = normalizeEmail(email)
+		}
+		daily := byEmail[lookupEmail]
 		if daily == nil {
 			daily = make(map[time.Time]int)
 		}
@@ -165,12 +174,12 @@ func collectCompareByEmail(repos []string, emails []string, start, end time.Time
 }
 
 // collectCompareByPeriod 按时间段收集对比数据。
-func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string) ([]periodCompareItem, error, bool) {
+func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string, normalizeEmail func(string) string) ([]periodCompareItem, error, bool) {
 	items := make([]periodCompareItem, 0, len(periods))
 	var errs []error
 	allFailed := true
 	for _, period := range periods {
-		perRepo, err := stats.CollectStatsPerRepo(repos, emails, period.Start, period.End, stats.BranchOption{})
+		perRepo, err := stats.CollectStatsPerRepo(repos, emails, period.Start, period.End, stats.BranchOption{}, normalizeEmail)
 		if err != nil {
 			errs = append(errs, err)
 		}
