@@ -18,12 +18,12 @@ import (
 
 // 命令行标志变量
 var (
-	topEmails []string // 要过滤的邮箱列表
-	topMonths int      // 统计的月份数
-	topSince  string   // 起始日期
-	topUntil  string   // 结束日期
-	topFormat string   // 输出格式：table/json/csv
-	topNoCache bool    // 是否禁用缓存
+	topEmails  []string // 要过滤的邮箱列表
+	topMonths  int      // 统计的月份数
+	topSince   string   // 起始日期
+	topUntil   string   // 结束日期
+	topFormat  string   // 输出格式：table/json/csv
+	topNoCache bool     // 是否禁用缓存
 
 	topNumber int  // 显示的仓库数量
 	topAll    bool // 是否显示所有仓库

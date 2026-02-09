@@ -35,7 +35,7 @@ func BenchmarkCollectCompare_SinglePass(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		items, err, allFailed := collectCompareByEmail(repos, emails, start, end, nil)
+		items, err, allFailed := collectCompareByEmail(repos, emails, start, end, nil, false)
 		if err != nil {
 			b.Fatalf("collect compare failed: %v", err)
 		}

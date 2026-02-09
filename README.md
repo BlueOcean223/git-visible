@@ -121,6 +121,7 @@ git-visible doctor
 - `--all-branches`：统计所有本地分支（按 commit hash 去重）
 - `--no-legend`：隐藏图例（仅 `table`）
 - `--no-summary`：隐藏摘要信息（仅 `table`）
+- `--no-cache`：禁用结果缓存，强制全量扫描
 
 ### top
 
@@ -131,6 +132,7 @@ git-visible doctor
 - `--since`：起始日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--until`：结束日期（`YYYY-MM-DD` / `YYYY-MM` / `2m`/`1w`/`1y`）
 - `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+- `--no-cache`：禁用结果缓存，强制全量扫描
 
 ### compare
 
@@ -139,6 +141,7 @@ git-visible doctor
   - 格式：`YYYY`（整年）、`YYYY-H1`/`YYYY-H2`（半年）、`YYYY-Q1`~`YYYY-Q4`（季度）、`YYYY-MM`（单月）
 - `--year`：对比的年份（`--period YYYY` 的快捷方式）
 - `--format`, `-f`：输出格式：`table` / `json` / `csv`（默认 `table`）
+- `--no-cache`：禁用结果缓存，强制全量扫描
 
 > 注：`--email` 与 `--period`/`--year` 互斥，不能同时使用。
 
@@ -180,6 +183,8 @@ aliases:
 ```
 
 仓库列表存储：`~/.config/git-visible/repos`
+
+统计缓存存储：`~/.config/git-visible/cache/`（缓存键包含仓库路径、HEAD hash、邮箱过滤、时间范围、分支信息）
 
 ## 帮助
 
