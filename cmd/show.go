@@ -83,7 +83,10 @@ func runShow(cmd *cobra.Command, _ []string) error {
 	}
 	st, collectErr := stats.CollectStats(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, branchOpt)
 	if collectErr != nil {
-		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
+		if len(st) == 0 {
+			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
+		}
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: some repositories failed, showing partial results:", collectErr)
 	}
 
 	showLegend = !showNoLegend

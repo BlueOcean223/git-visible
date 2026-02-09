@@ -74,7 +74,10 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	// 按仓库分别收集提交统计
 	perRepo, collectErr := stats.CollectStatsPerRepo(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{})
 	if collectErr != nil {
-		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
+		if len(perRepo) == 0 {
+			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
+		}
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: some repositories failed, showing partial results:", collectErr)
 	}
 
 	// 确定显示数量：--all 时 limit=0 表示不限制

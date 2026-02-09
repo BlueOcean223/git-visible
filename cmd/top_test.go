@@ -195,6 +195,55 @@ func TestTop_PercentSum100(t *testing.T) {
 	assert.Equal(t, 1000, sumUnits, "percent sum should be 100.0%%")
 }
 
+func TestTop_AllRepositoriesFail_ReturnsError(t *testing.T) {
+	home := withTempHome(t)
+	writeReposFile(t, home, []string{filepath.Join(home, "missing-repo")})
+
+	resetTopFlags()
+	topFormat = "json"
+	topSince = "2025-01-01"
+	topUntil = "2025-12-31"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runTop(c, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "all repositories failed")
+}
+
+func TestTop_PartialFailure_WarnsAndContinues(t *testing.T) {
+	home := withTempHome(t)
+	repoPath := filepath.Join(home, "code", "repo-1")
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithCommits(t, repoPath, 3, "test@example.com", base)
+	writeReposFile(t, home, []string{repoPath, filepath.Join(home, "missing-repo")})
+
+	resetTopFlags()
+	topFormat = "json"
+	topAll = true
+	topSince = "2025-01-01"
+	topUntil = "2025-12-31"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runTop(c, nil)
+	require.NoError(t, err)
+	assert.Contains(t, errBuf.String(), "warning:")
+
+	var got stats.RepoRanking
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "output=%s", out.String())
+	require.NotEmpty(t, got.Repositories)
+	assert.Equal(t, repoPath, got.Repositories[0].Repository)
+}
+
 func resetTopFlags() {
 	topEmails = nil
 	topMonths = 0

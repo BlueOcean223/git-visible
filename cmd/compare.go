@@ -87,9 +87,12 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("at least 2 emails are required to compare")
 		}
 
-		items, collectErr := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until)
+		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until)
 		if collectErr != nil {
-			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
+			if allFailed {
+				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "warning: some repositories failed, showing partial results:", collectErr)
 		}
 
 		switch format {
@@ -117,9 +120,12 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			periods = append(periods, period)
 		}
 
-		items, collectErr := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails)
+		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails)
 		if collectErr != nil {
-			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", collectErr)
+			if allFailed {
+				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "warning: some repositories failed, showing partial results:", collectErr)
 		}
 
 		switch format {
@@ -139,37 +145,57 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 }
 
 // collectCompareByEmail 按邮箱收集对比数据。
-func collectCompareByEmail(repos []string, emails []string, start, end time.Time) ([]emailCompareItem, error) {
+func collectCompareByEmail(repos []string, emails []string, start, end time.Time) ([]emailCompareItem, error, bool) {
 	items := make([]emailCompareItem, 0, len(emails))
 	var errs []error
+	allFailed := true
 	for _, email := range emails {
-		daily, err := stats.CollectStats(repos, []string{email}, start, end, stats.BranchOption{})
+		perRepo, err := stats.CollectStatsPerRepo(repos, []string{email}, start, end, stats.BranchOption{})
 		if err != nil {
 			errs = append(errs, err)
 		}
+		if len(perRepo) > 0 {
+			allFailed = false
+		}
+		daily := mergePerRepoStats(perRepo)
 		items = append(items, emailCompareItem{
 			Email:   email,
 			Metrics: stats.CalculateCompareMetrics(daily),
 		})
 	}
-	return items, errors.Join(errs...)
+	return items, errors.Join(errs...), allFailed
 }
 
 // collectCompareByPeriod 按时间段收集对比数据。
-func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string) ([]periodCompareItem, error) {
+func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string) ([]periodCompareItem, error, bool) {
 	items := make([]periodCompareItem, 0, len(periods))
 	var errs []error
+	allFailed := true
 	for _, period := range periods {
-		daily, err := stats.CollectStats(repos, emails, period.Start, period.End, stats.BranchOption{})
+		perRepo, err := stats.CollectStatsPerRepo(repos, emails, period.Start, period.End, stats.BranchOption{})
 		if err != nil {
 			errs = append(errs, err)
 		}
+		if len(perRepo) > 0 {
+			allFailed = false
+		}
+		daily := mergePerRepoStats(perRepo)
 		items = append(items, periodCompareItem{
 			Period:  period,
 			Metrics: stats.CalculateCompareMetrics(daily),
 		})
 	}
-	return items, errors.Join(errs...)
+	return items, errors.Join(errs...), allFailed
+}
+
+func mergePerRepoStats(perRepo map[string]map[time.Time]int) map[time.Time]int {
+	merged := make(map[time.Time]int)
+	for _, daily := range perRepo {
+		for day, count := range daily {
+			merged[day] += count
+		}
+	}
+	return merged
 }
 
 // yearsToPeriods 将年份列表转换为 YYYY 格式的时间段字符串。

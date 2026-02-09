@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +32,53 @@ func TestShow_BranchFlagsMutuallyExclusive(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "branch")
 	assert.Contains(t, err.Error(), "all-branches")
+}
+
+func TestShow_AllRepositoriesFail_ReturnsError(t *testing.T) {
+	home := withTempHome(t)
+	writeReposFile(t, home, []string{filepath.Join(home, "missing-repo")})
+
+	resetShowFlags()
+	showFormat = "json"
+	showSince = "2025-01-01"
+	showUntil = "2025-12-31"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runShow(c, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "all repositories failed")
+}
+
+func TestShow_PartialFailure_WarnsAndContinues(t *testing.T) {
+	home := withTempHome(t)
+	repoPath := filepath.Join(home, "code", "repo-1")
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithCommits(t, repoPath, 2, "test@example.com", base)
+	writeReposFile(t, home, []string{repoPath, filepath.Join(home, "missing-repo")})
+
+	resetShowFlags()
+	showFormat = "json"
+	showSince = "2025-01-01"
+	showUntil = "2025-12-31"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runShow(c, nil)
+	require.NoError(t, err)
+	assert.Contains(t, errBuf.String(), "warning:")
+
+	var got jsonOutput
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "output=%s", out.String())
+	assert.NotEmpty(t, got.Days)
 }
 
 func resetShowFlags() {

@@ -118,3 +118,42 @@ func TestCollectStats_NonExistentRepo(t *testing.T) {
 func TestMaxConcurrency(t *testing.T) {
 	assert.GreaterOrEqual(t, maxConcurrency, 1, "maxConcurrency should be >= 1")
 }
+
+func TestCollectStats_AllReposFail_ReturnsErrorAndEmptyMap(t *testing.T) {
+	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+
+	got, err := CollectStats([]string{"/non/existent/repo-a", "/non/existent/repo-b"}, nil, start, end, BranchOption{})
+	require.Error(t, err)
+	assert.Empty(t, got)
+}
+
+func TestCollectStats_PartialRepoFailure_ReturnsErrorAndPartialData(t *testing.T) {
+	repoPath := t.TempDir()
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithBranchCommits(t, repoPath, "main", 2, "test@example.com", base)
+
+	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+
+	got, err := CollectStats([]string{repoPath, "/non/existent/repo"}, nil, start, end, BranchOption{})
+	require.Error(t, err)
+	assert.NotEmpty(t, got)
+	assert.Greater(t, sumCounts(got), 0)
+}
+
+func TestCollectStats_AllReposSuccess_ReturnsNilError(t *testing.T) {
+	repoA := t.TempDir()
+	repoB := t.TempDir()
+	base := time.Date(2025, 6, 1, 12, 0, 0, 0, time.Local)
+	createRepoWithBranchCommits(t, repoA, "main", 2, "test@example.com", base)
+	createRepoWithBranchCommits(t, repoB, "main", 3, "test@example.com", base)
+
+	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
+
+	got, err := CollectStats([]string{repoA, repoB}, nil, start, end, BranchOption{})
+	require.NoError(t, err)
+	assert.NotEmpty(t, got)
+	assert.Greater(t, sumCounts(got), 0)
+}

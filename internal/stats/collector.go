@@ -63,7 +63,7 @@ func CollectStats(repos []string, emails []string, start, end time.Time, branch 
 			out[dayKeyToTime(dayKey, loc)] += count
 		}
 	})
-	if err != nil && done == nil {
+	if err != nil && len(done) == 0 {
 		return nil, err
 	}
 	return out, err
@@ -89,7 +89,7 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 		}
 		out[repoPath] = stats
 	})
-	if err != nil && done == nil {
+	if err != nil && len(done) == 0 {
 		return nil, err
 	}
 	return out, err

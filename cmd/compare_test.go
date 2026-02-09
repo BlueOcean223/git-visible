@@ -218,6 +218,57 @@ func TestCompare_JSONOutput_Structure(t *testing.T) {
 	assert.Equal(t, "b@example.com", got.Items[1].Label)
 }
 
+func TestCompare_AllRepositoriesFail_ReturnsError(t *testing.T) {
+	home := withTempHome(t)
+	writeReposFile(t, home, []string{filepath.Join(home, "missing-repo")})
+
+	resetCompareFlags()
+	compareEmails = []string{"a@example.com", "b@example.com"}
+	compareFormat = "json"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runCompare(c, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "all repositories failed")
+}
+
+func TestCompare_PartialFailure_WarnsAndContinues(t *testing.T) {
+	home := withTempHome(t)
+	repoPath := filepath.Join(home, "code", "repo-1")
+	base := timeNowLocal().AddDate(0, 0, -1)
+	specs := []commitSpec{
+		{Email: "a@example.com", When: base.Add(12 * time.Hour)},
+		{Email: "b@example.com", When: base.Add(12*time.Hour + 1*time.Minute)},
+	}
+	createRepoWithCommitSpecs(t, repoPath, specs)
+	writeReposFile(t, home, []string{repoPath, filepath.Join(home, "missing-repo")})
+
+	resetCompareFlags()
+	compareEmails = []string{"a@example.com", "b@example.com"}
+	compareFormat = "json"
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	c := &cobra.Command{}
+	c.SetOut(&out)
+	c.SetErr(&errBuf)
+
+	err := runCompare(c, nil)
+	require.NoError(t, err)
+	assert.Contains(t, errBuf.String(), "warning:")
+
+	var got compareJSONOutput
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "output=%s", out.String())
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, 1, got.Items[0].TotalCommits)
+	assert.Equal(t, 1, got.Items[1].TotalCommits)
+}
+
 func resetCompareFlags() {
 	compareEmails = nil
 	comparePeriods = nil
