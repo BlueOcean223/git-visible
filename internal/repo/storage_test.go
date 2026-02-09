@@ -128,7 +128,7 @@ func TestAddRepos_Batch(t *testing.T) {
 
 	added, err := AddRepos([]string{repo1, repo2})
 	require.NoError(t, err)
-	assert.Equal(t, 2, added)
+	assert.Equal(t, []string{repo1, repo2}, added)
 
 	repos, err := LoadRepos()
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestAddRepos_DeduplicatesBatchAndExisting(t *testing.T) {
 		" " + repo3,  // trim + new
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 2, added)
+	assert.Equal(t, []string{repo2, repo3}, added)
 
 	repos, err := LoadRepos()
 	require.NoError(t, err)

@@ -84,18 +84,13 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	var normalizeEmail func(string) string
-	if runCtx.Config != nil && len(runCtx.Config.Aliases) > 0 {
-		normalizeEmail = runCtx.Config.NormalizeEmail
-	}
-
 	switch {
 	case len(emails) > 0:
 		if len(emails) < 2 {
 			return fmt.Errorf("at least 2 emails are required to compare")
 		}
 
-		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until, normalizeEmail, !compareNoCache)
+		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until, runCtx.NormalizeEmail, !compareNoCache)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -128,7 +123,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			periods = append(periods, period)
 		}
 
-		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails, normalizeEmail, !compareNoCache)
+		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails, runCtx.NormalizeEmail, !compareNoCache)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -154,7 +149,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 
 // collectCompareByEmail 按邮箱收集对比数据。
 func collectCompareByEmail(repos []string, emails []string, start, end time.Time, normalizeEmail func(string) string, useCache bool) ([]emailCompareItem, error, bool) {
-	byEmail, err := stats.CollectStatsByEmailsWithOptions(repos, emails, start, end, stats.BranchOption{}, normalizeEmail, useCache)
+	byEmail, err := stats.CollectStatsByEmails(repos, emails, start, end, stats.BranchOption{}, normalizeEmail, useCache)
 	allFailed := err != nil && byEmail == nil
 
 	items := make([]emailCompareItem, 0, len(emails))
@@ -181,7 +176,7 @@ func collectCompareByPeriod(repos []string, periods []stats.Period, emails []str
 	var errs []error
 	allFailed := true
 	for _, period := range periods {
-		perRepo, err := stats.CollectStatsPerRepoWithOptions(repos, emails, period.Start, period.End, stats.BranchOption{}, normalizeEmail, useCache)
+		perRepo, err := stats.CollectStatsPerRepo(repos, emails, period.Start, period.End, stats.BranchOption{}, normalizeEmail, useCache)
 		if err != nil {
 			errs = append(errs, err)
 		}

@@ -83,12 +83,7 @@ func runShow(cmd *cobra.Command, _ []string) error {
 		Branch:      strings.TrimSpace(showBranch),
 		AllBranches: showAllBranch,
 	}
-	var normalizeEmail func(string) string
-	if runCtx.Config != nil && len(runCtx.Config.Aliases) > 0 {
-		normalizeEmail = runCtx.Config.NormalizeEmail
-	}
-
-	st, collectErr := stats.CollectStatsWithOptions(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, branchOpt, normalizeEmail, !showNoCache)
+	st, collectErr := stats.CollectStats(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, branchOpt, runCtx.NormalizeEmail, !showNoCache)
 	if collectErr != nil {
 		if len(st) == 0 {
 			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)

@@ -41,7 +41,7 @@
 | 按仓库收集 | `cmd/top.go` | `internal/stats/collector.go:CollectStatsPerRepo()` |
 | 时间范围计算 | `cmd/show.go` | `internal/stats/timerange.go:TimeRange()/ParseDate()` |
 | 渲染热力图 | `cmd/show.go` | `internal/stats/renderer.go:RenderHeatmapWithOptions()` |
-| 渲染图例 | `cmd/show.go` | `internal/stats/legend.go:RenderLegend()` |
+| 渲染图例 | `cmd/show.go` | `internal/stats/renderer.go:RenderLegend()` |
 | 统计摘要 | `cmd/show.go` | `internal/stats/summary.go:CalculateSummary()/RenderSummary()` |
 | 仓库排行 | `cmd/top.go` | `internal/stats/ranking.go:RankRepositories()` |
 | 对比统计 | `cmd/compare.go` | `internal/stats/compare.go:CalculateCompareMetrics()` |

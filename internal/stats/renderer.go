@@ -49,124 +49,6 @@ func RenderHeatmapWithOptions(stats map[time.Time]int, opts HeatmapOptions) stri
 	return renderHeatmapRange(stats, start, end, opts.ShowLegend, opts.ShowSummary)
 }
 
-// RenderHeatmap 将统计数据渲染为类似 GitHub 的贡献热力图。
-// 热力图以周为列、星期几为行，使用不同颜色表示提交数量级别。
-// 返回包含 ANSI 颜色代码的字符串，可直接输出到终端。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmap(stats map[time.Time]int, months int) string {
-	start, end, err := TimeRange("", "", months)
-	if err != nil {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  true,
-		ShowSummary: true,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapNoLegend 渲染热力图但不包含图例。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapNoLegend(stats map[time.Time]int, months int) string {
-	start, end, err := TimeRange("", "", months)
-	if err != nil {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  false,
-		ShowSummary: true,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapNoSummary 渲染热力图但不包含摘要信息。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapNoSummary(stats map[time.Time]int, months int) string {
-	start, end, err := TimeRange("", "", months)
-	if err != nil {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  true,
-		ShowSummary: false,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapNoLegendNoSummary 渲染热力图但不包含图例和摘要信息。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapNoLegendNoSummary(stats map[time.Time]int, months int) string {
-	start, end, err := TimeRange("", "", months)
-	if err != nil {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  false,
-		ShowSummary: false,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapRange 将统计数据渲染为指定时间范围内的贡献热力图。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapRange(stats map[time.Time]int, start, end time.Time) string {
-	if start.IsZero() || end.IsZero() {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  true,
-		ShowSummary: true,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapRangeNoLegend 渲染指定时间范围内的热力图，但不包含图例。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapRangeNoLegend(stats map[time.Time]int, start, end time.Time) string {
-	if start.IsZero() || end.IsZero() {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  false,
-		ShowSummary: true,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapRangeNoSummary 渲染指定时间范围内的热力图，但不包含摘要信息。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapRangeNoSummary(stats map[time.Time]int, start, end time.Time) string {
-	if start.IsZero() || end.IsZero() {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  true,
-		ShowSummary: false,
-		Since:       start,
-		Until:       end,
-	})
-}
-
-// RenderHeatmapRangeNoLegendNoSummary 渲染指定时间范围内的热力图，但不包含图例和摘要信息。
-// Deprecated: Use RenderHeatmapWithOptions instead.
-func RenderHeatmapRangeNoLegendNoSummary(stats map[time.Time]int, start, end time.Time) string {
-	if start.IsZero() || end.IsZero() {
-		return ""
-	}
-	return RenderHeatmapWithOptions(stats, HeatmapOptions{
-		ShowLegend:  false,
-		ShowSummary: false,
-		Since:       start,
-		Until:       end,
-	})
-}
-
 // renderHeatmapRange 是热力图渲染的核心实现。
 func renderHeatmapRange(stats map[time.Time]int, start, end time.Time, includeLegend bool, includeSummary bool) string {
 	if start.IsZero() || end.IsZero() || start.After(end) {
@@ -298,4 +180,31 @@ func renderCell(count int, today bool) string {
 		return color + "░░" + colorReset + "  "
 	}
 	return color + "██" + colorReset + "  "
+}
+
+// RenderLegend 渲染热力图图例。
+// 输出包含 ANSI 颜色代码的字符串，可直接输出到终端。
+func RenderLegend() string {
+	var b strings.Builder
+
+	b.WriteString("Less ")
+	b.WriteString(colorEmpty)
+	b.WriteString("░░")
+	b.WriteString(colorReset)
+	b.WriteByte(' ')
+	b.WriteString(colorLow)
+	b.WriteString("██")
+	b.WriteString(colorReset)
+	b.WriteByte(' ')
+	b.WriteString(colorMedium)
+	b.WriteString("██")
+	b.WriteString(colorReset)
+	b.WriteByte(' ')
+	b.WriteString(colorHigh)
+	b.WriteString("██")
+	b.WriteString(colorReset)
+	b.WriteString(" More\n")
+
+	b.WriteString("     0  1-4 5-9 10+\n")
+	return b.String()
 }

@@ -66,7 +66,7 @@ months := cfg.Months
 
 ## 并发模式
 
-`stats/collector.go` 的并发逻辑集中在 `collectCommon()`；`CollectStats()` 和 `CollectStatsPerRepo()` 通过 `CollectOptions` 复用同一套并发处理：
+`stats/collector.go` 的并发逻辑集中在 `collectCommonGeneric[T]()`；`CollectStats()`、`CollectStatsPerRepo()` 和 `CollectStatsByEmails()` 通过泛型参数复用同一套并发处理：
 ```go
 var wg sync.WaitGroup
 var mu sync.Mutex  // 保护共享 map

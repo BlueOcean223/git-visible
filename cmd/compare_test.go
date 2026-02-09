@@ -332,24 +332,24 @@ func addCompareFlagsForTest(cmd *cobra.Command) {
 	cmd.MarkFlagsMutuallyExclusive("email", "year")
 }
 
-func createRepoWithCommitSpecs(t *testing.T, path string, specs []commitSpec) {
-	t.Helper()
+func createRepoWithCommitSpecs(tb testing.TB, path string, specs []commitSpec) {
+	tb.Helper()
 
-	require.NoError(t, os.MkdirAll(path, 0o755))
+	require.NoError(tb, os.MkdirAll(path, 0o755))
 
 	r, err := git.PlainInit(path, false)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	wt, err := r.Worktree()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	for i, spec := range specs {
 		fileName := filepath.Join(path, "file.txt")
 		content := []byte(fmt.Sprintf("commit %d\n", i))
-		require.NoError(t, os.WriteFile(fileName, content, 0o644))
+		require.NoError(tb, os.WriteFile(fileName, content, 0o644))
 
 		_, err := wt.Add("file.txt")
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		sig := &object.Signature{
 			Name:  "Test",
@@ -361,7 +361,7 @@ func createRepoWithCommitSpecs(t *testing.T, path string, specs []commitSpec) {
 			Author:    sig,
 			Committer: sig,
 		})
-		require.NoError(t, err)
+		require.NoError(tb, err)
 	}
 }
 
@@ -376,4 +376,49 @@ func findLineWithPrefix(s, prefix string) string {
 
 func timeNowLocal() time.Time {
 	return time.Now().In(time.Local)
+}
+
+func BenchmarkCollectCompare_SinglePass(b *testing.B) {
+	root := b.TempDir()
+	emails := []string{
+		"alice@x.com",
+		"bob@y.com",
+		"carol@z.com",
+		"dave@w.com",
+		"eve@v.com",
+	}
+
+	base := time.Date(2024, 1, 1, 12, 0, 0, 0, time.Local)
+	repos := make([]string, 0, 3)
+	for repoIdx := 0; repoIdx < 3; repoIdx++ {
+		repoPath := filepath.Join(root, fmt.Sprintf("repo-%d", repoIdx))
+
+		specs := make([]commitSpec, 0, 320)
+		for i := 0; i < 320; i++ {
+			specs = append(specs, commitSpec{
+				Email: emails[i%5],
+				When:  base.AddDate(0, 0, i%180).Add(time.Duration(i) * time.Minute),
+			})
+		}
+		createRepoWithCommitSpecs(b, repoPath, specs)
+		repos = append(repos, repoPath)
+	}
+
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local)
+	end := time.Date(2024, 12, 31, 0, 0, 0, 0, time.Local)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		items, err, allFailed := collectCompareByEmail(repos, emails, start, end, nil, false)
+		if err != nil {
+			b.Fatalf("collect compare failed: %v", err)
+		}
+		if allFailed {
+			b.Fatalf("all repositories failed unexpectedly")
+		}
+		if len(items) != len(emails) {
+			b.Fatalf("unexpected items length: got=%d want=%d", len(items), len(emails))
+		}
+	}
 }

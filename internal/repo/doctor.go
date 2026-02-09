@@ -10,9 +10,10 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+// 性能预警阈值。
 const (
-	repoCountWarnThreshold = 50
-	gitSizeWarnThreshold   = int64(1 << 30) // 1GB
+	repoCountWarnThreshold = 50             // 仓库数量超过此值时发出警告
+	gitSizeWarnThreshold   = int64(1 << 30) // .git 目录体积超过 1GB 时发出警告
 )
 
 // CheckBranchReachability 检查仓库 HEAD 和指定分支是否可达（有提交）。
@@ -84,6 +85,7 @@ func CheckPerformance(repos []string) []string {
 	return warnings
 }
 
+// getRepoSize 计算仓库 .git 目录的总文件大小（字节）。
 func getRepoSize(repoPath string) (int64, error) {
 	gitPath := filepath.Join(repoPath, ".git")
 	var size int64

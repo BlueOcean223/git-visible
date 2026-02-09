@@ -144,7 +144,7 @@ func TestCollectStats_AllReposFail_ReturnsErrorAndEmptyMap(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{"/non/existent/repo-a", "/non/existent/repo-b"}, nil, start, end, BranchOption{}, nil)
+	got, err := CollectStats([]string{"/non/existent/repo-a", "/non/existent/repo-b"}, nil, start, end, BranchOption{}, nil, true)
 	require.Error(t, err)
 	assert.Empty(t, got)
 }
@@ -157,7 +157,7 @@ func TestCollectStats_PartialRepoFailure_ReturnsErrorAndPartialData(t *testing.T
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath, "/non/existent/repo"}, nil, start, end, BranchOption{}, nil)
+	got, err := CollectStats([]string{repoPath, "/non/existent/repo"}, nil, start, end, BranchOption{}, nil, true)
 	require.Error(t, err)
 	assert.NotEmpty(t, got)
 	assert.Greater(t, sumCounts(got), 0)
@@ -173,7 +173,7 @@ func TestCollectStats_AllReposSuccess_ReturnsNilError(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoA, repoB}, nil, start, end, BranchOption{}, nil)
+	got, err := CollectStats([]string{repoA, repoB}, nil, start, end, BranchOption{}, nil, true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, got)
 	assert.Greater(t, sumCounts(got), 0)
@@ -190,7 +190,7 @@ func TestCollectStats_FirstCollectionCreatesCacheFile(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStatsWithOptions([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -222,7 +222,7 @@ func TestCollectStats_SecondCollectionHitsCacheWhenHeadUnchanged(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	first, err := CollectStatsWithOptions([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
+	first, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
 	require.NoError(t, err)
 
 	originalScan := collectRepoFromRepositoryFn
@@ -233,7 +233,7 @@ func TestCollectStats_SecondCollectionHitsCacheWhenHeadUnchanged(t *testing.T) {
 		collectRepoFromRepositoryFn = originalScan
 	})
 
-	second, err := CollectStatsWithOptions([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
+	second, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{}, nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, first, second)
 }
@@ -277,7 +277,7 @@ func TestCollectStats_AliasMergeCountsCombined(t *testing.T) {
 
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
 	end := time.Date(2024, 1, 3, 0, 0, 0, 0, loc)
-	got, err := CollectStats([]string{"mem://alias-repo"}, []string{"alice@company.com"}, start, end, BranchOption{}, cfg.NormalizeEmail)
+	got, err := CollectStats([]string{"mem://alias-repo"}, []string{"alice@company.com"}, start, end, BranchOption{}, cfg.NormalizeEmail, true)
 	require.NoError(t, err)
 	assert.Equal(t, 3, sumCounts(got))
 }
@@ -397,7 +397,7 @@ func TestCollectStats_Branch_MainOnly(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "main"}, nil)
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "main"}, nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, 3, sumCounts(got), "should only include commits reachable from main")
 }
@@ -410,7 +410,7 @@ func TestCollectStats_Branch_Nonexistent_WarningSkip(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "nonexistent"}, nil)
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{Branch: "nonexistent"}, nil, true)
 	require.Error(t, err)
 	assert.Empty(t, got)
 	assert.Contains(t, err.Error(), `branch "nonexistent" not found`)
@@ -424,7 +424,7 @@ func TestCollectStats_AllBranches_DedupByHash(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{AllBranches: true}, nil)
+	got, err := CollectStats([]string{repoPath}, nil, start, end, BranchOption{AllBranches: true}, nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, 4, sumCounts(got), "should de-duplicate commits reachable from multiple branches")
 }
@@ -457,7 +457,7 @@ func TestCollectStats_Branch_MissingInOneRepo_Continue(t *testing.T) {
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 	end := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
-	got, err := CollectStats([]string{repoMain, repoNoMain}, nil, start, end, BranchOption{Branch: "main"}, nil)
+	got, err := CollectStats([]string{repoMain, repoNoMain}, nil, start, end, BranchOption{Branch: "main"}, nil, true)
 	require.Error(t, err, "missing branch should be a warning, not fatal")
 	assert.Equal(t, 2, sumCounts(got))
 	assert.Contains(t, err.Error(), repoNoMain)
@@ -515,6 +515,7 @@ func TestCollectStatsByEmails_MemoryRepoBuckets(t *testing.T) {
 		end,
 		BranchOption{},
 		nil,
+		true,
 	)
 	require.NoError(t, err)
 

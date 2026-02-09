@@ -14,11 +14,12 @@ var errNoRepositoriesAdded = errors.New("no repositories added")
 
 // RunContext holds the common initialization result for commands.
 type RunContext struct {
-	Repos  []string
-	Emails []string
-	Since  time.Time
-	Until  time.Time
-	Config *config.Config
+	Repos          []string
+	Emails         []string
+	Since          time.Time
+	Until          time.Time
+	Config         *config.Config
+	NormalizeEmail func(string) string // 邮箱别名规范化函数，无别名时为 nil
 
 	months int
 }
@@ -70,12 +71,18 @@ func prepareRun(emails []string, months int, since, until string) (*RunContext, 
 		mergedEmails = []string{strings.TrimSpace(cfg.Email)}
 	}
 
+	var normalizeEmail func(string) string
+	if len(cfg.Aliases) > 0 {
+		normalizeEmail = cfg.NormalizeEmail
+	}
+
 	return &RunContext{
-		Repos:  repos,
-		Emails: mergedEmails,
-		Since:  start,
-		Until:  end,
-		Config: cfg,
-		months: resolvedMonths,
+		Repos:          repos,
+		Emails:         mergedEmails,
+		Since:          start,
+		Until:          end,
+		Config:         cfg,
+		NormalizeEmail: normalizeEmail,
+		months:         resolvedMonths,
 	}, nil
 }

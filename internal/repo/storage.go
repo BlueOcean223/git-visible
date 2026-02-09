@@ -111,11 +111,11 @@ func saveRepos(repos []string) error {
 
 // AddRepos 批量添加仓库到列表（如果不存在）。
 // 路径会被标准化后存储，已存在的仓库会被静默忽略。
-// 返回实际新增的仓库数量。
-func AddRepos(paths []string) (added int, err error) {
+// 返回实际新增的仓库路径列表（已标准化）。
+func AddRepos(paths []string) (added []string, err error) {
 	repos, err := LoadRepos()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	existing := make(map[string]struct{}, len(repos))
@@ -127,7 +127,7 @@ func AddRepos(paths []string) (added int, err error) {
 	for _, path := range paths {
 		normalized, err := normalizePath(path)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if _, ok := existing[normalized]; ok {
 			continue
@@ -137,15 +137,15 @@ func AddRepos(paths []string) (added int, err error) {
 	}
 
 	if len(toAdd) == 0 {
-		return 0, nil
+		return []string{}, nil
 	}
 
 	repos = append(repos, toAdd...)
 	if err := saveRepos(repos); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return len(toAdd), nil
+	return toAdd, nil
 }
 
 // AddRepo 添加仓库到列表（如果不存在）。
