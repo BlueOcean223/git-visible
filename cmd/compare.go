@@ -146,24 +146,21 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 
 // collectCompareByEmail 按邮箱收集对比数据。
 func collectCompareByEmail(repos []string, emails []string, start, end time.Time) ([]emailCompareItem, error, bool) {
+	byEmail, err := stats.CollectStatsByEmails(repos, emails, start, end, stats.BranchOption{})
+	allFailed := err != nil && byEmail == nil
+
 	items := make([]emailCompareItem, 0, len(emails))
-	var errs []error
-	allFailed := true
 	for _, email := range emails {
-		perRepo, err := stats.CollectStatsPerRepo(repos, []string{email}, start, end, stats.BranchOption{})
-		if err != nil {
-			errs = append(errs, err)
+		daily := byEmail[email]
+		if daily == nil {
+			daily = make(map[time.Time]int)
 		}
-		if len(perRepo) > 0 {
-			allFailed = false
-		}
-		daily := mergePerRepoStats(perRepo)
 		items = append(items, emailCompareItem{
 			Email:   email,
 			Metrics: stats.CalculateCompareMetrics(daily),
 		})
 	}
-	return items, errors.Join(errs...), allFailed
+	return items, err, allFailed
 }
 
 // collectCompareByPeriod 按时间段收集对比数据。

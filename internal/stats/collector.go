@@ -19,6 +19,7 @@ import (
 
 // maxConcurrency 是并发处理仓库的最大数量，默认为 CPU 核心数。
 var maxConcurrency = runtime.NumCPU()
+var collectRepoByEmailsFn = collectRepoByEmails
 
 // BranchOption controls which branch(es) to collect commits from.
 // Default behavior (zero value) is to collect from HEAD only.
@@ -93,6 +94,46 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 		return nil, err
 	}
 	return out, err
+}
+
+// CollectStatsByEmails 并发收集多个仓库的提交统计，并按邮箱分桶聚合。
+// 返回 map[email]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
+// 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
+func CollectStatsByEmails(repos []string, emails []string, start, end time.Time, branch BranchOption) (map[string]map[time.Time]int, error) {
+	loc := end.Location()
+	out := make(map[string]map[int]int, len(emails))
+	done, err := collectCommonByEmails(CollectOptions{
+		Repos:     repos,
+		Emails:    emails,
+		Since:     start,
+		Until:     end,
+		Branch:    branch.Branch,
+		AllBranch: branch.AllBranches,
+	}, func(_ string, byEmail map[string]map[int]int) {
+		for email, daily := range byEmail {
+			target := out[email]
+			if target == nil {
+				target = make(map[int]int, len(daily))
+				out[email] = target
+			}
+			for dayKey, count := range daily {
+				target[dayKey] += count
+			}
+		}
+	})
+	if err != nil && len(done) == 0 {
+		return nil, err
+	}
+
+	converted := make(map[string]map[time.Time]int, len(out))
+	for email, daily := range out {
+		dayStats := make(map[time.Time]int, len(daily))
+		for dayKey, count := range daily {
+			dayStats[dayKeyToTime(dayKey, loc)] = count
+		}
+		converted[email] = dayStats
+	}
+	return converted, err
 }
 
 func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily map[int]int)) ([]string, error) {
@@ -180,6 +221,91 @@ func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily m
 	return done, errors.Join(errs...)
 }
 
+func collectCommonByEmails(opts CollectOptions, aggregator func(repoPath string, daily map[string]map[int]int)) ([]string, error) {
+	if opts.Since.IsZero() {
+		return nil, fmt.Errorf("start must be set")
+	}
+	if opts.Until.IsZero() {
+		return nil, fmt.Errorf("end must be set")
+	}
+
+	branch, err := normalizeBranchOption(BranchOption{
+		Branch:      opts.Branch,
+		AllBranches: opts.AllBranch,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	loc := opts.Until.Location()
+	start := beginningOfDay(opts.Since, loc)
+	end := beginningOfDay(opts.Until, loc)
+
+	if start.After(end) {
+		return nil, fmt.Errorf("start must be <= end (start=%s, end=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+	startDayKey := dayKeyFromTime(start, loc)
+	endDayKey := dayKeyFromTime(end, loc)
+
+	emailSet := make(map[string]struct{}, len(opts.Emails))
+	for _, email := range opts.Emails {
+		if email == "" {
+			continue
+		}
+		emailSet[email] = struct{}{}
+	}
+
+	done := make([]string, 0, len(opts.Repos))
+
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		emu  sync.Mutex
+		pmu  sync.Mutex
+		errs []error
+	)
+
+	bar := newRepoProgressBar(len(opts.Repos))
+	if bar != nil {
+		defer func() { _ = bar.Finish() }()
+	}
+
+	sem := make(chan struct{}, maxConcurrency)
+
+	for _, repoPath := range opts.Repos {
+		wg.Add(1)
+		go func(repoPath string) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			defer wg.Done()
+			defer func() {
+				if bar == nil {
+					return
+				}
+				pmu.Lock()
+				_ = bar.Add(1)
+				pmu.Unlock()
+			}()
+
+			stats, err := collectRepoByEmailsFn(repoPath, startDayKey, endDayKey, loc, emailSet, branch)
+			if err != nil {
+				emu.Lock()
+				errs = append(errs, err)
+				emu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			aggregator(repoPath, stats)
+			done = append(done, repoPath)
+			mu.Unlock()
+		}(repoPath)
+	}
+
+	wg.Wait()
+	return done, errors.Join(errs...)
+}
+
 // CollectStatsMonths 兼容旧接口：按最近 N 个月（对齐到周日）并截止到今天统计。
 func CollectStatsMonths(repos []string, emails []string, months int) (map[time.Time]int, error) {
 	start, end, err := TimeRange("", "", months)
@@ -230,6 +356,19 @@ func collectRepo(repoPath string, startDayKey, endDayKey int, loc *time.Location
 	return collectRepoFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch)
 }
 
+func collectRepoByEmails(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[string]map[int]int, error) {
+	if _, err := os.Stat(repoPath); err != nil {
+		return nil, fmt.Errorf("stat repo %s: %w", repoPath, err)
+	}
+
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("open repo %s: %w", repoPath, err)
+	}
+
+	return collectRepoByEmailsFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch)
+}
+
 func collectRepoFromRepository(repo *git.Repository, repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[int]int, error) {
 	out := make(map[int]int)
 	startPoints, err := collectStartPoints(repo, repoPath, branch)
@@ -272,6 +411,61 @@ func collectRepoFromRepository(repo *git.Repository, repoPath string, startDayKe
 			}
 
 			out[commitDayKey]++
+			return nil
+		})
+		iterator.Close()
+		if iterErr != nil && !errors.Is(iterErr, storer.ErrStop) {
+			return nil, fmt.Errorf("iterate repo %s: %w", repoPath, iterErr)
+		}
+	}
+
+	return out, nil
+}
+
+func collectRepoByEmailsFromRepository(repo *git.Repository, repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption) (map[string]map[int]int, error) {
+	out := make(map[string]map[int]int)
+	startPoints, err := collectStartPoints(repo, repoPath, branch)
+	if err != nil {
+		return nil, err
+	}
+
+	seenCommits := make(map[plumbing.Hash]struct{})
+
+	for _, from := range startPoints {
+		iterator, err := repo.Log(&git.LogOptions{From: from})
+		if err != nil {
+			return nil, fmt.Errorf("log repo %s: %w", repoPath, err)
+		}
+
+		iterErr := iterator.ForEach(func(c *object.Commit) error {
+			if branch.AllBranches {
+				if _, seen := seenCommits[c.Hash]; seen {
+					return storer.ErrStop
+				}
+				seenCommits[c.Hash] = struct{}{}
+			}
+
+			email := c.Author.Email
+			if len(emailSet) > 0 {
+				if _, ok := emailSet[email]; !ok {
+					return nil
+				}
+			}
+
+			commitDayKey := dayKeyFromTime(c.Author.When, loc)
+			if commitDayKey > endDayKey {
+				return nil
+			}
+			if commitDayKey < startDayKey {
+				return nil
+			}
+
+			daily := out[email]
+			if daily == nil {
+				daily = make(map[int]int)
+				out[email] = daily
+			}
+			daily[commitDayKey]++
 			return nil
 		})
 		iterator.Close()
