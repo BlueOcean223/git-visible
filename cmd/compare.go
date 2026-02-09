@@ -17,6 +17,7 @@ var (
 	comparePeriods []string // 要对比的时间段列表
 	compareYears   []int    // 要对比的年份列表（--period YYYY 的快捷方式）
 	compareFormat  string   // 输出格式：table/json/csv
+	compareNoCache bool     // 是否禁用缓存
 )
 
 // compareCmd 实现 compare 子命令，用于对比多个邮箱或多个时间段的贡献统计。
@@ -37,6 +38,7 @@ func init() {
 	compareCmd.Flags().StringArrayVar(&comparePeriods, "period", nil, "Periods to compare (repeatable): YYYY, YYYY-HN, YYYY-QN, YYYY-MM")
 	compareCmd.Flags().IntSliceVar(&compareYears, "year", nil, "Years to compare (repeatable; shortcut for --period YYYY)")
 	compareCmd.Flags().StringVarP(&compareFormat, "format", "f", "table", "Output format: table/json/csv")
+	compareCmd.Flags().BoolVar(&compareNoCache, "no-cache", false, "Disable cache, force full scan")
 
 	compareCmd.MarkFlagsMutuallyExclusive("email", "period")
 	compareCmd.MarkFlagsMutuallyExclusive("email", "year")
@@ -93,7 +95,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("at least 2 emails are required to compare")
 		}
 
-		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until, normalizeEmail)
+		items, collectErr, allFailed := collectCompareByEmail(runCtx.Repos, emails, runCtx.Since, runCtx.Until, normalizeEmail, !compareNoCache)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -126,7 +128,7 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 			periods = append(periods, period)
 		}
 
-		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails, normalizeEmail)
+		items, collectErr, allFailed := collectCompareByPeriod(runCtx.Repos, periods, runCtx.Emails, normalizeEmail, !compareNoCache)
 		if collectErr != nil {
 			if allFailed {
 				return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)
@@ -151,8 +153,8 @@ func runCompare(cmd *cobra.Command, _ []string) error {
 }
 
 // collectCompareByEmail 按邮箱收集对比数据。
-func collectCompareByEmail(repos []string, emails []string, start, end time.Time, normalizeEmail func(string) string) ([]emailCompareItem, error, bool) {
-	byEmail, err := stats.CollectStatsByEmails(repos, emails, start, end, stats.BranchOption{}, normalizeEmail)
+func collectCompareByEmail(repos []string, emails []string, start, end time.Time, normalizeEmail func(string) string, useCache bool) ([]emailCompareItem, error, bool) {
+	byEmail, err := stats.CollectStatsByEmailsWithOptions(repos, emails, start, end, stats.BranchOption{}, normalizeEmail, useCache)
 	allFailed := err != nil && byEmail == nil
 
 	items := make([]emailCompareItem, 0, len(emails))
@@ -174,12 +176,12 @@ func collectCompareByEmail(repos []string, emails []string, start, end time.Time
 }
 
 // collectCompareByPeriod 按时间段收集对比数据。
-func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string, normalizeEmail func(string) string) ([]periodCompareItem, error, bool) {
+func collectCompareByPeriod(repos []string, periods []stats.Period, emails []string, normalizeEmail func(string) string, useCache bool) ([]periodCompareItem, error, bool) {
 	items := make([]periodCompareItem, 0, len(periods))
 	var errs []error
 	allFailed := true
 	for _, period := range periods {
-		perRepo, err := stats.CollectStatsPerRepo(repos, emails, period.Start, period.End, stats.BranchOption{}, normalizeEmail)
+		perRepo, err := stats.CollectStatsPerRepoWithOptions(repos, emails, period.Start, period.End, stats.BranchOption{}, normalizeEmail, useCache)
 		if err != nil {
 			errs = append(errs, err)
 		}

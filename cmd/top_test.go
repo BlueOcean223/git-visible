@@ -287,6 +287,7 @@ func resetTopFlags() {
 	topFormat = "table"
 	topNumber = 10
 	topAll = false
+	topNoCache = false
 }
 
 func addTopFlagsForTest(cmd *cobra.Command) {
@@ -299,6 +300,7 @@ func addTopFlagsForTest(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&topSince, "since", "", "Start date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	cmd.Flags().StringVar(&topUntil, "until", "", "End date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	cmd.Flags().StringVarP(&topFormat, "format", "f", "table", "Output format: table/json/csv")
+	cmd.Flags().BoolVar(&topNoCache, "no-cache", false, "Disable cache, force full scan")
 }
 
 func withTempHome(t *testing.T) string {

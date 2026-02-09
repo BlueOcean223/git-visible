@@ -28,6 +28,7 @@ var (
 	showLegend    bool     // 是否显示图例（仅 table 输出）
 	showNoSummary bool     // 是否隐藏摘要信息
 	showSummary   bool     // 是否显示摘要信息
+	showNoCache   bool     // 是否禁用缓存
 )
 
 // showCmd 实现 show 子命令，用于显示贡献热力图。
@@ -61,6 +62,7 @@ func addShowFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&showFormat, "format", "f", "table", "Output format: table/json/csv")
 	cmd.Flags().BoolVar(&showNoLegend, "no-legend", false, "Hide legend in table output")
 	cmd.Flags().BoolVar(&showNoSummary, "no-summary", false, "Hide summary")
+	cmd.Flags().BoolVar(&showNoCache, "no-cache", false, "Disable cache, force full scan")
 }
 
 // runShow 是 show 命令的核心逻辑。
@@ -86,7 +88,7 @@ func runShow(cmd *cobra.Command, _ []string) error {
 		normalizeEmail = runCtx.Config.NormalizeEmail
 	}
 
-	st, collectErr := stats.CollectStats(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, branchOpt, normalizeEmail)
+	st, collectErr := stats.CollectStatsWithOptions(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, branchOpt, normalizeEmail, !showNoCache)
 	if collectErr != nil {
 		if len(st) == 0 {
 			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)

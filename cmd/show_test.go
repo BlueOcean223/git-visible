@@ -133,4 +133,5 @@ func resetShowFlags() {
 	showLegend = false
 	showNoSummary = false
 	showSummary = false
+	showNoCache = false
 }

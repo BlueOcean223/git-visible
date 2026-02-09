@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"git-visible/internal/cache"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -21,6 +24,8 @@ import (
 var maxConcurrency = runtime.NumCPU()
 var collectRepoFn = collectRepo
 var collectRepoByEmailsFn = collectRepoByEmails
+var collectRepoFromRepositoryFn = collectRepoFromRepository
+var collectRepoByEmailsFromRepositoryFn = collectRepoByEmailsFromRepository
 
 // BranchOption controls which branch(es) to collect commits from.
 // Default behavior (zero value) is to collect from HEAD only.
@@ -39,6 +44,7 @@ type CollectOptions struct {
 	Until          time.Time
 	Branch         string
 	AllBranch      bool
+	UseCache       bool
 	NormalizeEmail func(string) string
 }
 
@@ -52,6 +58,11 @@ type CollectOptions struct {
 // 返回以日期（当天 00:00:00）为键、提交数为值的映射。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
 func CollectStats(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string) (map[time.Time]int, error) {
+	return CollectStatsWithOptions(repos, emails, start, end, branch, normalizeEmail, true)
+}
+
+// CollectStatsWithOptions 与 CollectStats 类似，但允许显式控制是否启用缓存。
+func CollectStatsWithOptions(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string, useCache bool) (map[time.Time]int, error) {
 	loc := end.Location()
 	out := make(map[time.Time]int)
 	done, err := collectCommon(CollectOptions{
@@ -61,6 +72,7 @@ func CollectStats(repos []string, emails []string, start, end time.Time, branch 
 		Until:          end,
 		Branch:         branch.Branch,
 		AllBranch:      branch.AllBranches,
+		UseCache:       useCache,
 		NormalizeEmail: normalizeEmail,
 	}, func(_ string, daily map[int]int) {
 		for dayKey, count := range daily {
@@ -77,6 +89,11 @@ func CollectStats(repos []string, emails []string, start, end time.Time, branch 
 // 返回 map[repoPath]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
 func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string) (map[string]map[time.Time]int, error) {
+	return CollectStatsPerRepoWithOptions(repos, emails, start, end, branch, normalizeEmail, true)
+}
+
+// CollectStatsPerRepoWithOptions 与 CollectStatsPerRepo 类似，但允许显式控制是否启用缓存。
+func CollectStatsPerRepoWithOptions(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string, useCache bool) (map[string]map[time.Time]int, error) {
 	loc := end.Location()
 	out := make(map[string]map[time.Time]int)
 	done, err := collectCommon(CollectOptions{
@@ -86,6 +103,7 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 		Until:          end,
 		Branch:         branch.Branch,
 		AllBranch:      branch.AllBranches,
+		UseCache:       useCache,
 		NormalizeEmail: normalizeEmail,
 	}, func(repoPath string, daily map[int]int) {
 		stats := make(map[time.Time]int, len(daily))
@@ -104,6 +122,11 @@ func CollectStatsPerRepo(repos []string, emails []string, start, end time.Time, 
 // 返回 map[email]map[day]count，其中 day 为当天 00:00:00（由 end 的时区决定）。
 // 如果部分仓库收集失败，会返回已成功收集的数据和聚合的错误。
 func CollectStatsByEmails(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string) (map[string]map[time.Time]int, error) {
+	return CollectStatsByEmailsWithOptions(repos, emails, start, end, branch, normalizeEmail, true)
+}
+
+// CollectStatsByEmailsWithOptions 与 CollectStatsByEmails 类似，但允许显式控制是否启用缓存。
+func CollectStatsByEmailsWithOptions(repos []string, emails []string, start, end time.Time, branch BranchOption, normalizeEmail func(string) string, useCache bool) (map[string]map[time.Time]int, error) {
 	loc := end.Location()
 	out := make(map[string]map[int]int, len(emails))
 	done, err := collectCommonByEmails(CollectOptions{
@@ -113,6 +136,7 @@ func CollectStatsByEmails(repos []string, emails []string, start, end time.Time,
 		Until:          end,
 		Branch:         branch.Branch,
 		AllBranch:      branch.AllBranches,
+		UseCache:       useCache,
 		NormalizeEmail: normalizeEmail,
 	}, func(_ string, byEmail map[string]map[int]int) {
 		for email, daily := range byEmail {
@@ -212,7 +236,7 @@ func collectCommon(opts CollectOptions, aggregator func(repoPath string, daily m
 				pmu.Unlock()
 			}()
 
-			stats, err := collectRepoFn(repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+			stats, err := collectRepoFn(repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail, opts.UseCache)
 			if err != nil {
 				emu.Lock()
 				errs = append(errs, err)
@@ -302,7 +326,7 @@ func collectCommonByEmails(opts CollectOptions, aggregator func(repoPath string,
 				pmu.Unlock()
 			}()
 
-			stats, err := collectRepoByEmailsFn(repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+			stats, err := collectRepoByEmailsFn(repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail, opts.UseCache)
 			if err != nil {
 				emu.Lock()
 				errs = append(errs, err)
@@ -357,7 +381,7 @@ func newRepoProgressBar(total int) *progressbar.ProgressBar {
 //   - 统计口径基于 Author.When，且 Author.When 不保证单调，禁止据此提前终止遍历。
 //   - 禁止基于 Author.When 或 Committer.When 的 < start 重新引入 ErrStop。
 //   - 性能保障依赖邮箱过滤前移、dayKey 轻量聚合、以及 --all-branches 下的 hash 剪枝。
-func collectRepo(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string) (map[int]int, error) {
+func collectRepo(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string, useCache bool) (map[int]int, error) {
 	if _, err := os.Stat(repoPath); err != nil {
 		return nil, fmt.Errorf("stat repo %s: %w", repoPath, err)
 	}
@@ -368,10 +392,36 @@ func collectRepo(repoPath string, startDayKey, endDayKey int, loc *time.Location
 		return nil, fmt.Errorf("open repo %s: %w", repoPath, err)
 	}
 
-	return collectRepoFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+	var cacheKey cache.CacheKey
+	if useCache {
+		headRef, err := repo.Head()
+		if err != nil {
+			return nil, fmt.Errorf("head repo %s: %w", repoPath, err)
+		}
+		cacheKey = buildRepoCacheKey(repoPath, headRef.Hash().String(), startDayKey, endDayKey, emailSet, branch)
+
+		entry, err := cache.LoadCache(cacheKey)
+		if err == nil {
+			daily, convErr := fromCachedStats(entry.Stats)
+			if convErr == nil {
+				return daily, nil
+			}
+		}
+	}
+
+	stats, err := collectRepoFromRepositoryFn(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	if useCache {
+		_ = cache.SaveCache(cacheKey, toCachedStats(stats))
+	}
+
+	return stats, nil
 }
 
-func collectRepoByEmails(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string) (map[string]map[int]int, error) {
+func collectRepoByEmails(repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string, _ bool) (map[string]map[int]int, error) {
 	if _, err := os.Stat(repoPath); err != nil {
 		return nil, fmt.Errorf("stat repo %s: %w", repoPath, err)
 	}
@@ -381,7 +431,7 @@ func collectRepoByEmails(repoPath string, startDayKey, endDayKey int, loc *time.
 		return nil, fmt.Errorf("open repo %s: %w", repoPath, err)
 	}
 
-	return collectRepoByEmailsFromRepository(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
+	return collectRepoByEmailsFromRepositoryFn(repo, repoPath, startDayKey, endDayKey, loc, emailSet, branch, normalizeEmail)
 }
 
 func collectRepoFromRepository(repo *git.Repository, repoPath string, startDayKey, endDayKey int, loc *time.Location, emailSet map[string]struct{}, branch BranchOption, normalizeEmail func(string) string) (map[int]int, error) {
@@ -493,6 +543,61 @@ func collectRepoByEmailsFromRepository(repo *git.Repository, repoPath string, st
 	}
 
 	return out, nil
+}
+
+func buildRepoCacheKey(repoPath string, headHash string, startDayKey, endDayKey int, emailSet map[string]struct{}, branch BranchOption) cache.CacheKey {
+	return cache.CacheKey{
+		RepoPath:  repoPath,
+		HEADHash:  headHash,
+		Emails:    sortedEmails(emailSet),
+		TimeRange: fmt.Sprintf("%s_%s", dayKeyToDateString(startDayKey), dayKeyToDateString(endDayKey)),
+		Branch:    branch.Branch,
+		AllBranch: branch.AllBranches,
+	}
+}
+
+func sortedEmails(emailSet map[string]struct{}) []string {
+	if len(emailSet) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(emailSet))
+	for email := range emailSet {
+		out = append(out, email)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func toCachedStats(daily map[int]int) map[string]int {
+	out := make(map[string]int, len(daily))
+	for dayKey, count := range daily {
+		out[dayKeyToDateString(dayKey)] = count
+	}
+	return out
+}
+
+func fromCachedStats(stats map[string]int) (map[int]int, error) {
+	out := make(map[int]int, len(stats))
+	for day, count := range stats {
+		dayKey, err := dateStringToDayKey(day)
+		if err != nil {
+			return nil, err
+		}
+		out[dayKey] = count
+	}
+	return out, nil
+}
+
+func dayKeyToDateString(dayKey int) string {
+	return dayKeyToTime(dayKey, time.UTC).Format("2006-01-02")
+}
+
+func dateStringToDayKey(day string) (int, error) {
+	t, err := time.Parse("2006-01-02", strings.TrimSpace(day))
+	if err != nil {
+		return 0, fmt.Errorf("parse cache day %q: %w", day, err)
+	}
+	return dayKeyFromTime(t, time.UTC), nil
 }
 
 func resolveNormalizeEmail(normalizeEmail func(string) string) func(string) string {

@@ -23,6 +23,7 @@ var (
 	topSince  string   // 起始日期
 	topUntil  string   // 结束日期
 	topFormat string   // 输出格式：table/json/csv
+	topNoCache bool    // 是否禁用缓存
 
 	topNumber int  // 显示的仓库数量
 	topAll    bool // 是否显示所有仓库
@@ -48,6 +49,7 @@ func init() {
 	topCmd.Flags().StringVar(&topSince, "since", "", "Start date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	topCmd.Flags().StringVar(&topUntil, "until", "", "End date (YYYY-MM-DD, YYYY-MM, or relative like 2m/1w/1y)")
 	topCmd.Flags().StringVarP(&topFormat, "format", "f", "table", "Output format: table/json/csv")
+	topCmd.Flags().BoolVar(&topNoCache, "no-cache", false, "Disable cache, force full scan")
 
 	rootCmd.AddCommand(topCmd)
 }
@@ -77,7 +79,7 @@ func runTop(cmd *cobra.Command, _ []string) error {
 	}
 
 	// 按仓库分别收集提交统计
-	perRepo, collectErr := stats.CollectStatsPerRepo(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{}, normalizeEmail)
+	perRepo, collectErr := stats.CollectStatsPerRepoWithOptions(runCtx.Repos, runCtx.Emails, runCtx.Since, runCtx.Until, stats.BranchOption{}, normalizeEmail, !topNoCache)
 	if collectErr != nil {
 		if len(perRepo) == 0 {
 			return fmt.Errorf("all repositories failed to collect stats: %w", collectErr)

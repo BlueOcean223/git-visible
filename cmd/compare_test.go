@@ -318,6 +318,7 @@ func resetCompareFlags() {
 	comparePeriods = nil
 	compareYears = nil
 	compareFormat = "table"
+	compareNoCache = false
 }
 
 func addCompareFlagsForTest(cmd *cobra.Command) {
@@ -325,6 +326,7 @@ func addCompareFlagsForTest(cmd *cobra.Command) {
 	cmd.Flags().StringArrayVar(&comparePeriods, "period", nil, "Periods to compare (repeatable): YYYY, YYYY-HN, YYYY-QN, YYYY-MM")
 	cmd.Flags().IntSliceVar(&compareYears, "year", nil, "Years to compare (repeatable; shortcut for --period YYYY)")
 	cmd.Flags().StringVarP(&compareFormat, "format", "f", "table", "Output format: table/json/csv")
+	cmd.Flags().BoolVar(&compareNoCache, "no-cache", false, "Disable cache, force full scan")
 
 	cmd.MarkFlagsMutuallyExclusive("email", "period")
 	cmd.MarkFlagsMutuallyExclusive("email", "year")
