@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/viper"
@@ -114,4 +116,26 @@ func Save(config Config) error {
 		*instance = config
 	}
 	return nil
+}
+
+// ValidateConfig 检查配置合法性，返回问题列表。
+func ValidateConfig(cfg *Config) []string {
+	if cfg == nil {
+		return []string{"config is nil"}
+	}
+
+	var issues []string
+
+	if cfg.Months <= 0 {
+		issues = append(issues, fmt.Sprintf("months must be > 0, got %d", cfg.Months))
+	}
+
+	if cfg.Email != "" {
+		email := strings.TrimSpace(cfg.Email)
+		if !strings.Contains(email, "@") {
+			issues = append(issues, fmt.Sprintf("invalid email format: %q", cfg.Email))
+		}
+	}
+
+	return issues
 }

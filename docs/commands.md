@@ -12,6 +12,7 @@
 | `git-visible list` | 列出已添加仓库 | `cmd/list.go` |
 | `git-visible remove <path>` | 移除仓库 | `cmd/remove.go` |
 | `git-visible set [key] [value]` | 配置管理 | `cmd/set.go` |
+| `git-visible doctor` | 环境诊断 | `cmd/doctor.go` |
 | `git-visible version` | 显示版本 | `cmd/version.go` |
 
 ## 参数设计
@@ -69,6 +70,11 @@
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--invalid` | bool | 移除所有无效仓库 |
+
+### doctor
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| - | - | 无参数，执行配置、仓库、分支、权限、性能诊断 |
 
 ## Cobra 注册方式
 

@@ -37,6 +37,7 @@ go run .
 - `git-visible remove --invalid`：移除所有无效仓库
 - `git-visible set`：显示当前默认配置
 - `git-visible set <key> <value>`：设置默认配置（支持 `email` / `months`）
+- `git-visible doctor`：一站式环境诊断（配置、仓库、分支、权限、性能）
 - `git-visible version`：显示版本信息
 
 ## 使用示例
@@ -101,6 +102,12 @@ git-visible set email your@email.com
 git-visible set months 12
 ```
 
+运行环境诊断：
+
+```bash
+git-visible doctor
+```
+
 ## 各命令参数（Flags）
 
 ### show
@@ -150,6 +157,10 @@ git-visible set months 12
 ### remove
 
 - `--invalid`：移除所有无效仓库（使用时不需要传 `path` 参数）
+
+### doctor
+
+- 无参数：按顺序执行配置合法性、仓库有效性、分支可达性、权限与性能预警检查
 
 ## 配置与数据文件
 
