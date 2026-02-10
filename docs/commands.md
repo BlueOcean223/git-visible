@@ -12,6 +12,9 @@
 | `git-visible list` | 列出已添加仓库 | `cmd/list.go` |
 | `git-visible remove <path>` | 移除仓库 | `cmd/remove.go` |
 | `git-visible set [key] [value]` | 配置管理 | `cmd/set.go` |
+| `git-visible set alias add <name> <email1> [email2...]` | 新增或更新邮箱别名组 | `cmd/set.go` |
+| `git-visible set alias remove <name>` | 删除邮箱别名组 | `cmd/set.go` |
+| `git-visible set alias list` | 列出邮箱别名组 | `cmd/set.go` |
 | `git-visible doctor` | 环境诊断 | `cmd/doctor.go` |
 | `git-visible version` | 显示版本 | `cmd/version.go` |
 
@@ -73,6 +76,25 @@
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--invalid` | bool | 移除所有无效仓库 |
+
+### set
+| 子命令/参数 | 类型 | 说明 |
+|------------|------|------|
+| `[key] [value]` | positional | 设置默认配置项，支持 `email` / `months` |
+| `alias add <name> <email1> [email2...]` | positional | 新增或更新一个 alias 组（同名会替换邮箱列表） |
+| `alias remove <name>` | positional | 删除指定 alias 组 |
+| `alias list` | positional | 列出全部 alias 组 |
+
+示例：
+
+```bash
+git-visible set
+git-visible set email your@email.com
+git-visible set months 12
+git-visible set alias add Alice alice@company.com alice@gmail.com
+git-visible set alias remove Alice
+git-visible set alias list
+```
 
 ### doctor
 | 参数 | 类型 | 说明 |

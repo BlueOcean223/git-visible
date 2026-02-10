@@ -37,6 +37,9 @@ go run .
 - `git-visible remove --invalid`：移除所有无效仓库
 - `git-visible set`：显示当前默认配置
 - `git-visible set <key> <value>`：设置默认配置（支持 `email` / `months`）
+- `git-visible set alias add <name> <email1> [email2...]`：新增或更新邮箱别名组
+- `git-visible set alias remove <name>`：删除邮箱别名组
+- `git-visible set alias list`：查看所有邮箱别名组
 - `git-visible doctor`：一站式环境诊断（配置、仓库、分支、权限、性能）
 - `git-visible version`：显示版本信息
 
@@ -100,6 +103,9 @@ git-visible compare --year 2024 --year 2025
 git-visible set
 git-visible set email your@email.com
 git-visible set months 12
+git-visible set alias add Alice alice@company.com alice@gmail.com
+git-visible set alias remove Alice
+git-visible set alias list
 ```
 
 运行环境诊断：

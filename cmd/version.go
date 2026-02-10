@@ -9,7 +9,7 @@ import (
 // Version 定义当前应用版本号。
 // 可在构建时通过 -ldflags 覆盖此值。
 var (
-	Version = "0.4.0"
+	Version = "0.5.0"
 )
 
 // versionCmd 实现 version 子命令，用于显示版本信息。
